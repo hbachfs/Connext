@@ -96,17 +96,17 @@ git checkout develop
 
 | Vai trò | Họ tên | Nhánh phụ trách |
 |---|---|---|
-| Project Manager | _(tên)_ | `docs/pm-management` |
-| Business Analyst | _(tên)_ | `docs/ba-srs` |
-| UX Designer | _(tên)_ | `design/ux-wireframe` |
-| UI Designer | _(tên)_ | `design/ui-design-system` |
-| Backend 1 | _(tên)_ | `feature/be1-core-realtime` |
-| Backend 2 | _(tên)_ | `feature/be2-auth-contacts-groups-storage` |
-| Frontend 1 | _(tên)_ | `feature/fe1-chat-webrtc` |
-| Frontend 2 | _(tên)_ | `feature/fe2-auth-contacts-groups-media` |
-| DevOps | _(tên)_ | `devops/infra-cicd` |
-| QA/QC 1 | _(tên)_ | `qa/qa1-business-ui-testing` |
-| QA/QC 2 | _(tên)_ | `qa/qa2-api-realtime-perf` |
+| Project Manager | _(Bách)_ | `docs/pm-management` |
+| Business Analyst | _(Dương)_ | `docs/ba-srs` |
+| UX Designer | _(Thuận)_ | `design/ux-wireframe` |
+| UI Designer | _(Thái)_ | `design/ui-design-system` |
+| Backend 1 | _(Thông)_ | `feature/be1-core-realtime` |
+| Backend 2 | _(Thái)_ | `feature/be2-auth-contacts-groups-storage` |
+| Frontend 1 | _(Trung)_ | `feature/fe1-chat-webrtc` |
+| Frontend 2 | _(Linh)_ | `feature/fe2-auth-contacts-groups-media` |
+| DevOps | _(Bảo)_ | `devops/infra-cicd` |
+| QA/QC 1 | _(Tùng)_ | `qa/qa1-business-ui-testing` |
+| QA/QC 2 | _(Chiến)_ | `qa/qa2-api-realtime-perf` |
 
 ## Đóng góp
 
