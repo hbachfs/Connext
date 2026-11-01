@@ -88,7 +88,7 @@ git checkout develop
 ## Tài liệu
 
 - Đặc tả SRS: thư mục [`docs/`](docs/)
-- Thiết kế Figma: _(dán link)_
+- Thiết kế Figma: [Connext trên Figma](https://www.figma.com/design/j4eyVglgmtoZCfuh5eVrgx/Wed-chat?node-id=0-1&t=oh8jXfJQcKk50pXs-1) (dev dùng Dev Mode để xem kích thước, màu, font và export assets)
 - Bảng công việc: _(dán link GitHub Projects)_
 - Tài liệu API (Swagger): _(cập nhật khi có server)_
 
