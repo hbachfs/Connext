@@ -1,0 +1,27 @@
+# Bí mật và cấu hình cục bộ
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+secrets.json
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Hệ điều hành
+.DS_Store
+Thumbs.db
+
+# Node (nếu dùng cho frontend tooling)
+node_modules/
