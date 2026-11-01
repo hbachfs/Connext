@@ -25,10 +25,10 @@
 
 | Tầng | Công nghệ |
 |---|---|
-| Frontend | Blazor WebAssembly, MudBlazor |
+| Frontend | ASP.NET Core MVC / Razor Pages, HTML/CSS/JavaScript, Bootstrap |
 | Backend | ASP.NET Core Web API (.NET 8/9), Clean Architecture |
-| Thời gian thực | ASP.NET Core SignalR |
-| Gọi thoại/video | WebRTC + SignalR Signaling |
+| Thời gian thực | ASP.NET Core SignalR (Hub phía server, JavaScript Client phía trình duyệt) |
+| Gọi thoại/video | WebRTC (API JavaScript của trình duyệt) + SignalR Signaling |
 | Cơ sở dữ liệu | SQL Server + Entity Framework Core (Code-First) |
 | Cache | Redis |
 | Lưu file | Cloudinary hoặc MinIO |
@@ -58,7 +58,7 @@ Connext/
 ├── src/
 │   ├── Connext.Shared/    # DTO, Enum, Validation dùng chung
 │   ├── Connext.Api/       # ASP.NET Core Web API + SignalR Hubs
-│   ├── Connext.Client/    # Blazor WebAssembly
+│   ├── Connext.Web/       # ASP.NET Core MVC/Razor giao diện, wwwroot (JS, CSS)
 │   └── Connext.Data/      # EF Core, Migrations
 ├── tests/             # Unit test, Postman Collection, Test Case
 ├── docker-compose.yml
