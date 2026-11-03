@@ -26,7 +26,7 @@
 | Tầng | Công nghệ |
 |---|---|
 | Frontend | ASP.NET Core MVC / Razor Pages, HTML/CSS/JavaScript, Bootstrap |
-| Backend | ASP.NET Core Web API (.NET 8/9), Clean Architecture |
+| Backend | ASP.NET Core Web API (.NET 10), Clean Architecture |
 | Thời gian thực | ASP.NET Core SignalR (Hub phía server, JavaScript Client phía trình duyệt) |
 | Gọi thoại/video | WebRTC (API JavaScript của trình duyệt) + SignalR Signaling |
 | Cơ sở dữ liệu | SQL Server + Entity Framework Core (Code-First) |
