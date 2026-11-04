@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>Connext.Api-8e51a6c4-7f3b-4c87-9432-23df12ec6153</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
