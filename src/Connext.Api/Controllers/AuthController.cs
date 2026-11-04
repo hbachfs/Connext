@@ -1,11 +1,12 @@
 using Connext.Api.Services;
 using Connext.Shared.DTOs.Auth;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Connext.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/auth")]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -19,6 +20,8 @@ public class AuthController : ControllerBase
     /// Đăng ký tài khoản mới.
     /// </summary>
     [HttpPost("register")]
+    [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
     {
         if (!ModelState.IsValid)
@@ -41,6 +44,9 @@ public class AuthController : ControllerBase
     /// Đăng nhập bằng số điện thoại và mật khẩu.
     /// </summary>
     [HttpPost("login")]
+    [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
         if (!ModelState.IsValid)
@@ -58,4 +64,3 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 }
-

@@ -2,71 +2,83 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Connext.Api.Services;
 using Connext.Data.Entities;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Connext.Tests;
 
 public class JwtTokenServiceTests
 {
-    private readonly IConfiguration _configuration;
+    private readonly JwtSettings _jwtSettings;
     private readonly JwtTokenService _jwtTokenService;
 
     public JwtTokenServiceTests()
     {
-        var inMemorySettings = new Dictionary<string, string?>
+        _jwtSettings = new JwtSettings
         {
-            {"JwtSettings:SecretKey", "SuperSecretKeyForTestingJwtToken1234567890!"},
-            {"JwtSettings:Issuer", "ConnextApi"},
-            {"JwtSettings:Audience", "ConnextWeb"},
-            {"JwtSettings:ExpiryMinutes", "60"}
+            SecretKey = "SuperSecretKeyForTestingJwtTokenGeneration123456!",
+            Issuer = "ConnextTestIssuer",
+            Audience = "ConnextTestAudience",
+            ExpiryMinutes = 60
         };
 
-        _configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(inMemorySettings)
-            .Build();
-
-        _jwtTokenService = new JwtTokenService(_configuration);
+        _jwtTokenService = new JwtTokenService(Options.Create(_jwtSettings));
     }
 
     [Fact]
-    public void GenerateToken_ValidUser_ReturnsValidJwtWithCorrectClaims()
+    public void GenerateToken_ShouldContainThreeRequiredClaims()
     {
-        // Arrange
         var user = new User
         {
             Id = Guid.NewGuid(),
-            PhoneNumber = "0901234567",
-            DisplayName = "Nguyen Van A",
-            PasswordHash = "hashedpassword"
+            PhoneNumber = "0987654321",
+            DisplayName = "Nguyen Van A"
         };
 
-        // Act
         var tokenString = _jwtTokenService.GenerateToken(user);
-
-        // Assert
-        Assert.NotNull(tokenString);
-        Assert.NotEmpty(tokenString);
-
         var handler = new JwtSecurityTokenHandler();
-        Assert.True(handler.CanReadToken(tokenString));
+        var jwtToken = handler.ReadJwtToken(tokenString);
 
-        var jwt = handler.ReadJwtToken(tokenString);
+        var nameIdClaim = jwtToken.Claims.FirstOrDefault(c =>
+            c.Type == ClaimTypes.NameIdentifier || c.Type == "nameid");
+        Assert.NotNull(nameIdClaim);
+        Assert.Equal(user.Id.ToString(), nameIdClaim.Value);
 
-        Assert.Equal("ConnextApi", jwt.Issuer);
-        Assert.Contains("ConnextWeb", jwt.Audiences);
-
-        var idClaim = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
-        Assert.NotNull(idClaim);
-        Assert.Equal(user.Id.ToString(), idClaim.Value);
-
-        var phoneClaim = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.MobilePhone);
+        var phoneClaim = jwtToken.Claims.FirstOrDefault(c =>
+            c.Type == ClaimTypes.MobilePhone || c.Type == "mobilephone");
         Assert.NotNull(phoneClaim);
         Assert.Equal(user.PhoneNumber, phoneClaim.Value);
 
-        var nameClaim = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name);
+        var nameClaim = jwtToken.Claims.FirstOrDefault(c =>
+            c.Type == ClaimTypes.Name || c.Type == "unique_name");
         Assert.NotNull(nameClaim);
         Assert.Equal(user.DisplayName, nameClaim.Value);
     }
-}
 
+    [Fact]
+    public void GenerateToken_ShouldHaveCorrectIssuerAudienceAndExpiry()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            PhoneNumber = "0987654321",
+            DisplayName = "Nguyen Van A"
+        };
+        var beforeTime = DateTime.UtcNow;
+
+        var tokenString = _jwtTokenService.GenerateToken(user);
+        var afterTime = DateTime.UtcNow;
+
+        var handler = new JwtSecurityTokenHandler();
+        var jwtToken = handler.ReadJwtToken(tokenString);
+
+        Assert.Equal(_jwtSettings.Issuer, jwtToken.Issuer);
+        Assert.Contains(_jwtSettings.Audience, jwtToken.Audiences);
+
+        var expectedMinExpiry = beforeTime.AddMinutes(_jwtSettings.ExpiryMinutes);
+        var expectedMaxExpiry = afterTime.AddMinutes(_jwtSettings.ExpiryMinutes);
+
+        Assert.True(jwtToken.ValidTo >= expectedMinExpiry.AddSeconds(-2));
+        Assert.True(jwtToken.ValidTo <= expectedMaxExpiry.AddSeconds(2));
+    }
+}
