@@ -67,14 +67,32 @@ Connext/
 
 ## Chạy dự án
 
-> Mục này sẽ được DevOps cập nhật khi Docker Compose hoàn thành (cuối Tuần 1).
+Yêu cầu: Git, Docker Desktop (hoặc Docker Engine + Compose v2), .NET SDK 8.
 
 ```bash
 git clone https://github.com/hbachfs/Connext.git
 cd Connext
 git checkout develop
-# Các bước tiếp theo: cập nhật sau
+
+# Dựng hạ tầng dev: SQL Server, Redis, MinIO
+cp .env.example .env        # rồi mở .env đổi mật khẩu
+docker compose up -d
+docker compose ps           # chờ các service ở trạng thái "healthy"
 ```
+
+| Dịch vụ | Địa chỉ cục bộ |
+|---|---|
+| SQL Server | `localhost:1433` (user `sa`, mật khẩu trong `.env`) |
+| Redis | `localhost:6379` (mật khẩu trong `.env`) |
+| MinIO API / Console | `localhost:9000` / `http://localhost:9001` |
+
+Tắt hạ tầng: `docker compose down` (giữ dữ liệu) hoặc `docker compose down -v` (xóa cả dữ liệu).
+
+Khi `Connext.Api` và `Connext.Web` có Dockerfile, DevOps sẽ thêm chúng vào `docker-compose.yml`.
+
+### CI
+
+Workflow `.github/workflows/ci.yml` chạy trên mọi PR vào `develop` và `main`: build, test .NET 8 và kiểm tra `docker-compose.yml`. PR cần CI xanh trước khi merge.
 
 ## Lộ trình 4 tuần
 

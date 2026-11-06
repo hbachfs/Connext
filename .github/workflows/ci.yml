@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    name: Build và Test (.NET)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Tìm solution
+        id: sln
+        run: |
+          SLN=$(find . -maxdepth 3 -name '*.sln' -not -path './node_modules/*' | head -n 1)
+          if [ -z "$SLN" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Chưa có file .sln, bỏ qua build/test. Job sẽ tự chạy khi solution được thêm."
+          else
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "path=$SLN" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cài .NET SDK
+        if: steps.sln.outputs.found == 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache NuGet
+        if: steps.sln.outputs.found == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        if: steps.sln.outputs.found == 'true'
+        run: dotnet restore "${{ steps.sln.outputs.path }}"
+
+      - name: Build
+        if: steps.sln.outputs.found == 'true'
+        run: dotnet build "${{ steps.sln.outputs.path }}" --no-restore --configuration Release
+
+      - name: Test
+        if: steps.sln.outputs.found == 'true'
+        run: >-
+          dotnet test "${{ steps.sln.outputs.path }}" --no-build
+          --configuration Release --logger "trx;LogFileName=test-results.trx"
+          --results-directory TestResults
+
+      - name: Upload kết quả test
+        if: always() && steps.sln.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/
+          if-no-files-found: ignore
+
+  compose-validate:
+    name: Kiểm tra Docker Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
