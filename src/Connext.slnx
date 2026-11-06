@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="../tests/Connext.Tests/Connext.Tests.csproj" />
+  <Project Path="Connext.Api/Connext.Api.csproj" />
+  <Project Path="Connext.Data/Connext.Data.csproj" />
+  <Project Path="Connext.Shared/Connext.Shared.csproj" />
+</Solution>

@@ -69,6 +69,27 @@ Connext/
 
 Yêu cầu: Git, Docker Desktop (hoặc Docker Engine + Compose v2), .NET SDK 8.
 
+### Cấu hình cục bộ
+
+Không lưu khóa JWT hoặc chuỗi kết nối trong `appsettings.json`. Trong môi trường
+Development, API đọc các giá trị này từ .NET User Secrets:
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost;Database=ConnextDb;Trusted_Connection=True;TrustServerCertificate=True;" --project src/Connext.Api
+
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$bytes = New-Object byte[] 64
+$rng.GetBytes($bytes)
+$jwtKey = [Convert]::ToBase64String($bytes)
+$rng.Dispose()
+dotnet user-secrets set "JwtSettings:SecretKey" $jwtKey --project src/Connext.Api
+Remove-Variable jwtKey, bytes
+```
+
+Thay chuỗi kết nối bằng thông tin phù hợp với SQL Server của bạn. Trên môi trường
+khác, cấu hình các biến `ConnectionStrings__DefaultConnection` và
+`JwtSettings__SecretKey`; không commit giá trị bí mật vào repository.
+
 ```bash
 git clone https://github.com/hbachfs/Connext.git
 cd Connext
