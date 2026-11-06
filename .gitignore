@@ -23,5 +23,5 @@ TestResults/
 .DS_Store
 Thumbs.db
 
-# Node
+# Node (nếu dùng cho frontend tooling)
 node_modules/
