@@ -1,0 +1,49 @@
+﻿<div class="modal-overlay hidden" id="addGroupModal" onclick="closeModal(event)">
+    <div class="add-group-box">
+        <h5 class="group-title">Tạo nhóm</h5>
+
+        <div class="px-3">
+            <input type="text" class="form-control mb-2" placeholder="Tên nhóm">
+            <label class="search">
+                <img src="assets/search.svg" width="16" alt="">
+                <input type="text" placeholder="Tìm bạn...">
+            </label>
+        </div>
+
+        <div class="group-list">
+            <div class="group-letter">A</div>
+            <label class="group-item">
+                <input type="checkbox" class="form-check-input rounded-circle">
+                <span class="avatar">A</span>
+                Anh
+            </label>
+            <label class="group-item">
+                <input type="checkbox" class="form-check-input rounded-circle">
+                <span class="avatar">A</span>
+                A test
+            </label>
+            <label class="group-item">
+                <input type="checkbox" class="form-check-input rounded-circle">
+                <span class="avatar">A</span>
+                A test 2
+            </label>
+            <label class="group-item">
+                <input type="checkbox" class="form-check-input rounded-circle">
+                <span class="avatar">A</span>
+                A test 3
+            </label>
+
+            <div class="group-letter">B</div>
+            <label class="group-item">
+                <input type="checkbox" class="form-check-input rounded-circle">
+                <span class="avatar">A</span>
+                B test 4
+            </label>
+        </div>
+
+        <div class="group-foot">
+            <button type="button" class="btn btn-gray" onclick="hideModal('addGroupModal')">Hủy</button>
+            <button type="button" class="btn btn-primary" onclick="handleCreateGroup()">Tạo nhóm</button>
+        </div>
+    </div>
+</div>
