@@ -34,13 +34,24 @@ services:
     image: redis:7-alpine
     container_name: connext-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Hãy đặt REDIS_PASSWORD trong file .env}"]
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--requirepass",
+        "${REDIS_PASSWORD:?Hãy đặt REDIS_PASSWORD trong file .env}",
+      ]
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      test:
+        [
+          "CMD-SHELL",
+          'redis-cli -a "$$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG',
+        ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -67,6 +78,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - connext-net
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Connext.Api/Dockerfile
+    container_name: connext-api
+    restart: unless-stopped
+    ports:
+      - "5232:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=ConnextDb;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=True;
+      - Redis__Configuration=redis:6379,password=${REDIS_PASSWORD}
+      - JwtSettings__SecretKey=ThisIsASecretKeyForDevEnvironment123456789!
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - connext-net
 
