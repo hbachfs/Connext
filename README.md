@@ -67,14 +67,53 @@ Connext/
 
 ## Chạy dự án
 
-> Mục này sẽ được DevOps cập nhật khi Docker Compose hoàn thành (cuối Tuần 1).
+Yêu cầu: Git, Docker Desktop (hoặc Docker Engine + Compose v2), .NET SDK 8.
+
+### Cấu hình cục bộ
+
+Không lưu khóa JWT hoặc chuỗi kết nối trong `appsettings.json`. Trong môi trường
+Development, API đọc các giá trị này từ .NET User Secrets:
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost;Database=ConnextDb;Trusted_Connection=True;TrustServerCertificate=True;" --project src/Connext.Api
+
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$bytes = New-Object byte[] 64
+$rng.GetBytes($bytes)
+$jwtKey = [Convert]::ToBase64String($bytes)
+$rng.Dispose()
+dotnet user-secrets set "JwtSettings:SecretKey" $jwtKey --project src/Connext.Api
+Remove-Variable jwtKey, bytes
+```
+
+Thay chuỗi kết nối bằng thông tin phù hợp với SQL Server của bạn. Trên môi trường
+khác, cấu hình các biến `ConnectionStrings__DefaultConnection` và
+`JwtSettings__SecretKey`; không commit giá trị bí mật vào repository.
 
 ```bash
 git clone https://github.com/hbachfs/Connext.git
 cd Connext
 git checkout develop
-# Các bước tiếp theo: cập nhật sau
+
+# Dựng hạ tầng dev: SQL Server, Redis, MinIO
+cp .env.example .env        # rồi mở .env đổi mật khẩu
+docker compose up -d
+docker compose ps           # chờ các service ở trạng thái "healthy"
 ```
+
+| Dịch vụ | Địa chỉ cục bộ |
+|---|---|
+| SQL Server | `localhost:1433` (user `sa`, mật khẩu trong `.env`) |
+| Redis | `localhost:6379` (mật khẩu trong `.env`) |
+| MinIO API / Console | `localhost:9000` / `http://localhost:9001` |
+
+Tắt hạ tầng: `docker compose down` (giữ dữ liệu) hoặc `docker compose down -v` (xóa cả dữ liệu).
+
+Khi `Connext.Api` và `Connext.Web` có Dockerfile, DevOps sẽ thêm chúng vào `docker-compose.yml`.
+
+### CI
+
+Workflow `.github/workflows/ci.yml` chạy trên mọi PR vào `develop` và `main`: build, test .NET 8 và kiểm tra `docker-compose.yml`. PR cần CI xanh trước khi merge.
 
 ## Lộ trình 4 tuần
 

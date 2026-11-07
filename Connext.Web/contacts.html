@@ -1,0 +1,169 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+    <link href="css/style.css" rel="stylesheet">
+
+    <title>Danh bạ - Connext</title>
+</head>
+<body>
+    <div class="app-shell">
+        <div data-include="layouts/sidebar.html"></div>
+        <div class="app-body">
+            <div class="titlebar"> CWF - Nguyễn Văn A</div>
+            <div class="contacts-top">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <label class="search">
+                        <img src="assets/search.svg" width="18" alt="">
+                        <input type="text" placeholder="Tìm bạn bè...">
+                    </label>
+                    <button type="button" class="icon-btn" title="Thêm bạn" onclick="openModal('addFriendModal')"><img src="assets/add-friend.svg" width="24" alt="Thêm bạn"></button>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="tab-pill active" onclick="showTab('all')">Tất cả (5) </button>
+                    <button type="button" class="tab-pill" onclick="showTab('online')">Đang hoạt động (4) </button>
+                    <button type="button" class="tab-pill" onclick="showTab('invite')">Lời mời kết bạn (3) </button>
+                    <div class="sort-wrap ms-auto">
+                        <button type="button" class="sort-box" onclick="toggleSortMenu()">
+                            <i class="bi bi-arrow-down-up"></i>
+                            <span id="sortLabel">Tên (A-Z)</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                        <div class="sort-menu hidden" id="sortMenu">
+                            <button type="button" class="sort-item selected" onclick="chooseSort(this)"><i class="bi bi-check2"></i>Tên (A-Z)</button>
+                            <button type="button" class="sort-item" onclick="chooseSort(this)"><i class="bi bi-check2"></i>Tên (Z-A)</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                  <div class="contacts-body">
+                      <div class="friend-grid" id="friendGrid">
+                          <div class="friend-card">
+                              <div class="avatar">A<span class="dot"></span></div>
+                              <div class="friend-name">Minh Anh</div>
+                              <div class="friend-status">Đang hoạt động</div>
+                              <div class="friend-actions">
+                                  <button type="button" class="btn btn-primary" onclick="handleMessage()">Nhắn tin</button>
+                                  <button type="button" class="btn btn-gray" onclick="handleUnfriend()">Hủy kết bạn</button>
+                              </div>
+                          </div>
+                          <div class="friend-card">
+                              <div class="avatar dark">B<span class="dot"></span></div>
+                              <div class="friend-name">Thanh Bình</div>
+                              <div class="friend-status">Đang hoạt động</div>
+                              <div class="friend-actions">
+                                  <button type="button" class="btn btn-primary" onclick="handleMessage()">Nhắn tin</button>
+                                  <button type="button" class="btn btn-gray" onclick="handleUnfriend()">Hủy kết bạn</button>
+                              </div>
+                          </div>
+                          <div class="friend-card">
+                              <div class="avatar green">T</div>
+                              <div class="friend-name">Thu Trang</div>
+                              <div class="friend-status">Hoạt động 2 giờ trước</div>
+                              <div class="friend-actions">
+                                  <button type="button" class="btn btn-primary" onclick="handleMessage()">Nhắn tin</button>
+                                  <button type="button" class="btn btn-gray" onclick="handleUnfriend()">Hủy kết bạn</button>
+                              </div>
+                          </div>
+                          <div class="friend-card">
+                              <div class="avatar">T<span class="dot"></span></div>
+                              <div class="friend-name">Test</div>
+                              <div class="friend-status">Đang hoạt động</div>
+                              <div class="friend-actions">
+                                  <button type="button" class="btn btn-primary" onclick="handleMessage()">Nhắn tin</button>
+                                  <button type="button" class="btn btn-gray" onclick="handleUnfriend()">Hủy kết bạn</button>
+                              </div>
+                          </div>
+                          <div class="friend-card">
+                              <div class="avatar">T<span class="dot"></span></div>
+                              <div class="friend-name">Test</div>
+                              <div class="friend-status">Đang hoạt động</div>
+                              <div class="friend-actions">
+                                  <button type="button" class="btn btn-primary" onclick="handleMessage()">Nhắn tin</button>
+                                  <button type="button" class="btn btn-gray" onclick="handleUnfriend()">Hủy kết bạn</button>
+                              </div>
+                          </div>
+                      </div>
+                      <div class="friend-grid hidden" id="inviteGrid">
+                          <div class="friend-card">
+                              <div class="avatar">K<span class="dot"></span></div>
+                              <div class="friend-name">Khoa</div>
+                              <div class="friend-status">3 bạn chung</div>
+                              <div class="friend-actions">
+                                  <button type="button" class="btn btn-primary" onclick="handleAccept()">Chấp nhận</button>
+                                  <button type="button" class="btn btn-gray" onclick="handleDecline()">Xóa</button>
+                              </div>
+                          </div>
+                          <div class="friend-card">
+                              <div class="avatar">T<span class="dot"></span></div>
+                              <div class="friend-name">Test</div>
+                              <div class="friend-status">0 bạn chung</div>
+                              <div class="friend-actions">
+                                  <button type="button" class="btn btn-primary" onclick="handleAccept()">Chấp nhận</button>
+                                  <button type="button" class="btn btn-gray" onclick="handleDecline()">Xóa</button>
+                              </div>
+                          </div>
+                          <div class="friend-card">
+                              <div class="avatar">L<span class="dot"></span></div>
+                              <div class="friend-name">Test</div>
+                              <div class="friend-status">2 bạn chung</div>
+                              <div class="friend-actions">
+                                  <button type="button" class="btn btn-primary" onclick="handleAccept()">Chấp nhận</button>
+                                  <button type="button" class="btn btn-gray" onclick="handleDecline()">Xóa</button>
+                              </div>
+                          </div>
+                      </div>
+                          <div class="contacts-footer">
+                           <span>Trang 1/1</span>
+                           <ul class="pagination pagination-sm mb-0">
+                               <li class="page-item"><a class="page-link" href="#">&laquo;</a></li>
+                               <li class="page-item"><a class="page-link" href="#">1</a></li>
+                               <li class="page-item"><a class="page-link" href="#">2</a></li>
+                               <li class="page-item"><a class="page-link" href="#">3</a></li>
+                               <li class="page-item"><a class="page-link" href="#">&raquo;</a></li>
+                           </ul>
+                          </div>
+                      </div>
+                  </div>
+        </div>
+    <div data-include="layouts/add-friend.html"></div>
+        <script src="js/common.js"></script>
+        <script src="js/layout.js"></script>
+        <script>
+            function showTab(tab) {
+                const friendGrid = document.getElementById('friendGrid');
+                const inviteGrid = document.getElementById('inviteGrid');
+                friendGrid.classList.toggle('hidden', tab === 'invite');
+                inviteGrid.classList.toggle('hidden', tab !== 'invite');
+                friendGrid.querySelectorAll('.friend-card').forEach(card => {
+                    const online = card.querySelector('.dot') !== null;
+                    card.classList.toggle('hidden', tab === 'online' && !online);
+                });
+            }
+            function toggleSortMenu() {
+                document.getElementById('sortMenu').classList.toggle('hidden');
+                document.querySelector('.sort-box').classList.toggle('open');
+            }
+
+            function chooseSort(item) {
+                document.querySelectorAll('.sort-item').forEach(i => i.classList.remove('selected'));
+                item.classList.add('selected');
+                document.getElementById('sortLabel').textContent = item.textContent.trim();
+                toggleSortMenu();
+                handleSort();
+            }
+            function handleSort() { /* BE: sắp xếp danh sách bạn bè */ }
+            function handleMessage() { /* BE: mở cuộc trò chuyện */ }
+            function handleUnfriend() { /* BE: hủy kết bạn */ }
+            function handleAccept() { /* BE: chấp nhận lời mời */ }
+            function handleDecline() { /* BE: xóa lời mời */ }
+        </script>
+
+</body>
+</html>

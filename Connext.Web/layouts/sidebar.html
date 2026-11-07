@@ -1,0 +1,14 @@
+﻿<aside class="app-sidebar">
+    <div class="sidebar-top">
+        <a href="chat.html" class="sidebar-link"><img src="assets/nav-chat.svg" width="28" alt="Trò chuyện"><span class="nav-badge">3</span></a>
+        <a href="contacts.html" class="sidebar-link"><img src="assets/nav-contacts.svg" width="28" alt="Danh bạ"></a>
+        <div class="sidebar-settings">
+            <a href="profile.html" class="sidebar-link" onclick="toggleSettingsMenu(event)"><img src="assets/nav-settings.svg" width="28" alt="Cài đặt"></a>
+            <div class="settings-menu hidden" id="settingsMenu">
+                <a href="profile.html" class="settings-item"><img src="assets/menu-profile.svg" width="20" alt="">Hồ sơ</a>
+                <button type="button" class="settings-item danger" onclick="handleLogout()"><img src="assets/menu-logout.svg" width="20" alt="">Đăng xuất</button>
+            </div>
+        </div>
+    </div>
+    <div class="sidebar-avatar"></div>
+</aside>
