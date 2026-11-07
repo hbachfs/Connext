@@ -43,6 +43,7 @@ builder.Services.AddAuthorization();
 // ===== Dependency Injection =====
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IContactService, ContactService>();
 
 // ===== Controllers & Swagger =====
 builder.Services.AddControllers();
