@@ -38,7 +38,7 @@ jobs:
         if: steps.sln.outputs.found == 'true'
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Cache NuGet
         if: steps.sln.outputs.found == 'true'
@@ -72,9 +72,9 @@ jobs:
           if-no-files-found: ignore
 
   compose-validate:
-    name: Kiểm tra Docker Compose
+    name: Kiểm tra Docker Compose & Build
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -83,3 +83,6 @@ jobs:
         run: |
           cp .env.example .env
           docker compose config --quiet
+
+      - name: Test build Docker Web
+        run: docker build -t connext-web:ci -f Connext.Web/Dockerfile Connext.Web/
