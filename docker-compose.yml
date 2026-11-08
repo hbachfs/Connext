@@ -29,6 +29,19 @@ services:
       start_period: 30s
     networks:
       - connext-net
+      
+  connext-web:
+    container_name: connext-web
+    build:
+      context: ./Connext.Web
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    networks:
+      - connext-net
+    depends_on:
+      - api
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
