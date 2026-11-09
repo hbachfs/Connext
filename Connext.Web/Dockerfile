@@ -7,6 +7,9 @@ RUN rm -rf /usr/share/nginx/html/*
 # Sao chép toàn bộ mã nguồn HTML/CSS/JS vào thư mục web root của Nginx
 COPY . /usr/share/nginx/html
 
+# Sao chép cấu hình Reverse Proxy vào Nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # Mở cổng 80 cho web
 EXPOSE 80
 
