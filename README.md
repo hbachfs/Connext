@@ -111,6 +111,17 @@ Tắt hạ tầng: `docker compose down` (giữ dữ liệu) hoặc `docker comp
 
 Khi `Connext.Api` và `Connext.Web` có Dockerfile, DevOps sẽ thêm chúng vào `docker-compose.yml`.
 
+### Chạy trọn bộ hệ thống với Docker (Cập nhật mới)
+
+Khởi động tất cả các dịch vụ (SQL Server, Redis, MinIO, API, Web, Nginx) chỉ với 1 lệnh:
+
+```bash
+# 1. Tạo file cấu hình từ file mẫu
+cp .env.example .env
+
+# 2. Khởi động hệ thống
+docker compose up -d --build
+
 ### CI
 
 Workflow `.github/workflows/ci.yml` chạy trên mọi PR vào `develop` và `main`: build, test .NET 8 và kiểm tra `docker-compose.yml`. PR cần CI xanh trước khi merge.
