@@ -1,0 +1,9 @@
+/[Bb]in/
+/[Oo]bj/
+.vs/
+appsettings.Development.json
+appsettings.*.local.json
+secrets.json
+.env
+*.user
+/Connext/

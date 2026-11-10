@@ -1,113 +1,38 @@
 # Connext
 
-> Nền tảng nhắn tin thời gian thực và cộng tác đa phương tiện trên nền web, lấy cảm hứng từ Zalo Web.
-> Đồ án nhóm 11 thành viên, xây dựng 100% bằng C# / .NET.
+## Chạy backend (Connext.Api)
 
-**Connext** = *Connect* (kết nối) + *Next* (thế hệ kế tiếp). Người dùng nhắn tin, gọi thoại/video, gửi file và cộng tác nhóm ngay trên trình duyệt, không cần cài phần mềm.
-
-## Tính năng
-
-Đánh dấu `[x]` khi tính năng đã được merge vào `develop` và QA đã kiểm thử.
-
-**Ưu tiên 1 (bắt buộc có khi bảo vệ)**
-- [ ] Đăng ký, đăng nhập, OTP, JWT, hồ sơ cá nhân (FR-01, FR-02)
-- [ ] Tìm người dùng, kết bạn, chặn (FR-03, FR-04)
-- [ ] Chat 1-1 thời gian thực: Đã gửi/Đã nhận/Đã xem, đang nhập (FR-05)
-- [ ] Chat nhóm, @mention (FR-06)
-- [ ] Gửi file và ảnh HD, kho Ảnh/File/Link (FR-08, FR-09)
-
-**Ưu tiên 2 (làm nếu kịp tiến độ)**
-- [ ] Reply, reaction, thu hồi tin nhắn (FR-07)
-- [ ] Gọi thoại/video 1-1 bằng WebRTC, chia sẻ màn hình (FR-10)
-- [ ] Ghim tin nhắn, bình chọn, giao việc (FR-11, FR-12, FR-13)
-
-## Công nghệ
-
-| Tầng | Công nghệ |
-|---|---|
-| Frontend | ASP.NET Core MVC / Razor Pages, HTML/CSS/JavaScript, Bootstrap |
-| Backend | ASP.NET Core Web API (.NET 10), Clean Architecture |
-| Thời gian thực | ASP.NET Core SignalR (Hub phía server, JavaScript Client phía trình duyệt) |
-| Gọi thoại/video | WebRTC (API JavaScript của trình duyệt) + SignalR Signaling |
-| Cơ sở dữ liệu | SQL Server + Entity Framework Core (Code-First) |
-| Cache | Redis |
-| Lưu file | Cloudinary hoặc MinIO |
-| Hạ tầng | Docker Compose, GitHub Actions, Nginx |
-
-## Cấu trúc nhánh
-
-| Nhánh | Mục đích |
-|---|---|
-| `main` | Bản ổn định, dùng để demo và bảo vệ |
-| `develop` | Nhánh tích hợp chung, mọi PR đều vào đây |
-| `docs/pm-management`, `docs/ba-srs` | Tài liệu quản lý và đặc tả |
-| `design/ux-wireframe`, `design/ui-design-system` | Thiết kế UX/UI |
-| `feature/be1-*`, `feature/be2-*` | Backend |
-| `feature/fe1-*`, `feature/fe2-*` | Frontend |
-| `devops/infra-cicd` | Docker, CI/CD, triển khai |
-| `qa/qa1-*`, `qa/qa2-*` | Kiểm thử |
-
-Quy tắc làm việc chi tiết xem [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Cấu trúc thư mục dự kiến
-
-```
-Connext/
-├── docs/              # SRS, sơ đồ UML, báo cáo
-├── design/            # Link Figma, ảnh xuất thiết kế
-├── src/
-│   ├── Connext.Shared/    # DTO, Enum, Validation dùng chung
-│   ├── Connext.Api/       # ASP.NET Core Web API + SignalR Hubs
-│   ├── Connext.Web/       # ASP.NET Core MVC/Razor giao diện, wwwroot (JS, CSS)
-│   └── Connext.Data/      # EF Core, Migrations
-├── tests/             # Unit test, Postman Collection, Test Case
-├── docker-compose.yml
-└── .github/workflows/ # CI/CD
-```
-
-## Chạy dự án
-
-> Mục này sẽ được DevOps cập nhật khi Docker Compose hoàn thành (cuối Tuần 1).
+### Cấu hình bí mật (KHÔNG commit lên git)
+Các giá trị bí mật đặt bằng **User Secrets** (máy dev) hoặc **biến môi trường** (server/CI), không để trong `appsettings.json`.
 
 ```bash
-git clone https://github.com/hbachfs/Connext.git
-cd Connext
-git checkout develop
-# Các bước tiếp theo: cập nhật sau
+cd <thư mục chứa Connext.Api.csproj>
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<chuỗi kết nối SQL Server>"
+dotnet user-secrets set "Jwt:Key" "<chuỗi ngẫu nhiên >= 32 ký tự>"
+dotnet user-secrets set "Jwt:Issuer" "connext"
+dotnet user-secrets set "Jwt:Audience" "connext-clients"
+dotnet user-secrets set "Jwt:ExpireMinutes" "60"
+dotnet user-secrets set "Smtp:Host" "smtp.gmail.com"
+dotnet user-secrets set "Smtp:Port" "587"
+dotnet user-secrets set "Smtp:User" "<email gửi>"
+dotnet user-secrets set "Smtp:Password" "<App Password>"
+dotnet user-secrets set "Smtp:From" "<email gửi>"
+dotnet user-secrets set "Smtp:FromName" "Connext"
 ```
+Tạo chuỗi ngẫu nhiên: `openssl rand -base64 48`.
+Biến môi trường tương ứng: đổi `:` thành `__` (vd `Jwt__Key`, `Smtp__Password`).
+`Jwt:Key` ngắn hơn 32 byte thì app không khởi động.
 
-## Lộ trình 4 tuần
-
-| Tuần | Trọng tâm |
-|---|---|
-| 1 | Chốt phạm vi và SRS rút gọn, thiết kế UI các màn hình chính, dựng khung Solution, Docker, CI, Database |
-| 2 | Auth, danh bạ, chat 1-1 thời gian thực |
-| 3 | Chat nhóm, gửi file/ảnh HD, kho media, bắt đầu các tính năng ưu tiên 2 |
-| 4 | Ổn định, kiểm thử hồi quy, triển khai, hoàn thiện báo cáo và tập demo |
-
-## Tài liệu
-
-- Đặc tả SRS: thư mục [`docs/`](docs/)
-- Thiết kế Figma: [Connext trên Figma](https://www.figma.com/design/j4eyVglgmtoZCfuh5eVrgx/Wed-chat?node-id=0-1&t=oh8jXfJQcKk50pXs-1) (dev dùng Dev Mode để xem kích thước, màu, font và export assets)
-- Bảng công việc: _(dán link GitHub Projects)_
-- Tài liệu API (Swagger): _(cập nhật khi có server)_
-
-## Thành viên
-
-| Vai trò | Họ tên | Nhánh phụ trách |
+### Quên mật khẩu (3 bước)
+| Endpoint | Body | Kết quả |
 |---|---|---|
-| Project Manager | _(Bách)_ | `docs/pm-management` |
-| Business Analyst | _(Dương)_ | `docs/ba-srs` |
-| UX Designer | _(Thuận)_ | `design/ux-wireframe` |
-| UI Designer | _(Thái)_ | `design/ui-design-system` |
-| Backend 1 | _(Thông)_ | `feature/be1-core-realtime` |
-| Backend 2 | _(Thái)_ | `feature/be2-auth-contacts-groups-storage` |
-| Frontend 1 | _(Trung)_ | `feature/fe1-chat-webrtc` |
-| Frontend 2 | _(Linh)_ | `feature/fe2-auth-contacts-groups-media` |
-| DevOps | _(Bảo)_ | `devops/infra-cicd` |
-| QA/QC 1 | _(Tùng)_ | `qa/qa1-business-ui-testing` |
-| QA/QC 2 | _(Chiến)_ | `qa/qa2-api-realtime-perf` |
+| `POST /api/auth/forgot-password` | `{ email }` | Luôn 200 cùng một thông báo (không lộ email có tồn tại). Gửi OTP 6 số, hết hạn sau 5 phút |
+| `POST /api/auth/verify-otp` | `{ email, otp }` | 200 `data.resetToken` hoặc 400 thông báo chung. Sai 5 lần thì khóa mã |
+| `POST /api/auth/reset-password` | `{ resetToken, newPassword, confirmPassword }` | 200 hoặc 400. Token chỉ dùng 1 lần, hết hạn sau 10 phút |
 
-## Đóng góp
+Giới hạn: gửi lại cách nhau 60 giây, tối đa 5 mã/giờ/tài khoản; 10 request/phút/IP cho 3 endpoint này (429 khi vượt).
 
-Đọc [CONTRIBUTING.md](CONTRIBUTING.md) trước khi tạo Pull Request đầu tiên.
+### Test
+```bash
+dotnet test Connext.Api.Tests
+```
