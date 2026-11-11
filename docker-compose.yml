@@ -35,8 +35,6 @@ services:
     build:
       context: ./Connext.Web
       dockerfile: Dockerfile
-    ports:
-      - "8080:80"
     networks:
       - connext-net
     depends_on:
@@ -94,6 +92,27 @@ services:
     networks:
       - connext-net
 
+  minio-init:
+    image: minio/minio:latest
+    container_name: connext-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for MinIO...';
+      until /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}; do
+        sleep 1;
+      done;
+      echo 'Creating bucket...';
+      /usr/bin/mc mb --ignore-existing myminio/connext-uploads;
+      /usr/bin/mc anonymous set download myminio/connext-uploads;
+      echo 'MinIO bucket ready!';
+      exit 0;
+      "
+    networks:
+      - connext-net
+
   api:
     build:
       context: .
@@ -106,12 +125,26 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=ConnextDb;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=True;
       - Redis__Configuration=redis:6379,password=${REDIS_PASSWORD}
-      - JwtSettings__SecretKey=ThisIsASecretKeyForDevEnvironment123456789!
+      - JwtSettings__SecretKey=${JWT_SECRET_KEY:?Hãy đặt JWT_SECRET_KEY trong file .env}
     depends_on:
       sqlserver:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - connext-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: connext-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - connext-web
     networks:
       - connext-net
 

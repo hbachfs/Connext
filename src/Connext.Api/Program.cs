@@ -52,6 +52,22 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+// ===== Auto Run Migrations in Development =====
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    try
+    {
+        dbContext.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Lỗi xảy ra trong quá trình tự động chạy Migration.");
+    }
+}
+
 // ===== HTTP Pipeline =====
 if (app.Environment.IsDevelopment())
 {
