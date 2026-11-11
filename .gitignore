@@ -1,8 +1,29 @@
-/[Bb]in/
-/[Oo]bj/
+﻿## Build and output
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+TestResults/
+
+## Visual Studio
 .vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+## Rider & VS Code
+.idea/
+.vscode/
+
+## Environment and sensitive files
+.env
+.env.*
+!.env.example
 appsettings.Development.json
 appsettings.*.local.json
 secrets.json
-.env
-*.user
+
+## OS generated files
+.DS_Store
+Thumbs.db
