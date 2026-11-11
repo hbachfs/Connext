@@ -6,4 +6,3 @@ appsettings.*.local.json
 secrets.json
 .env
 *.user
-/Connext/
