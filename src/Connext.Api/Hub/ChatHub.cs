@@ -15,19 +15,26 @@ namespace Connext.Api.Hubs;
 public class ChatHub : Hub
 {
     private const int MaxContentLength = 4000;
-    private static readonly HashSet<string> AllowedTypes = new() { "text", "image", "file" };
+    private const int MaxFileNameLength = 255;
+    private const int TypingThrottleMs = 1500;
+    private const string TypingKey = "typing-last-sent";
+
+    private enum MessageType { Text, Image, File }
 
     // Theo dõi các kết nối của mỗi User (1 User có thể mở nhiều tab/trình duyệt)
+    // Lưu ý: chỉ đúng khi chạy 1 instance. Nhiều instance cần Redis backplane + lưu presence ngoài bộ nhớ.
     private static readonly ConcurrentDictionary<Guid, HashSet<string>> _userConnections = new();
     private static readonly object _presenceLock = new();
 
     private readonly AppDbContext _context;
     private readonly IWebHostEnvironment _env;
+    private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(AppDbContext context, IWebHostEnvironment env)
+    public ChatHub(AppDbContext context, IWebHostEnvironment env, ILogger<ChatHub> logger)
     {
         _context = context;
         _env = env;
+        _logger = logger;
     }
 
     public static string UserGroup(Guid userId) => $"user-{userId}";
@@ -41,6 +48,7 @@ public class ChatHub : Hub
             .Select(f => f.RequesterId == userId ? f.AddresseeId : f.RequesterId)
             .ToListAsync();
 
+    // ------------------------------------------------------------ kết nối
     public override async Task OnConnectedAsync()
     {
         var userId = GetCurrentUserId();
@@ -61,15 +69,23 @@ public class ChatHub : Hub
 
         if (firstConnection)
         {
-            await _context.Users.Where(u => u.Id == userId)
-                .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsOnline, true));
+            // Lỗi presence không được làm rớt kết nối của người dùng
+            try
+            {
+                await _context.Users.Where(u => u.Id == userId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsOnline, true));
 
-            // Chỉ báo trạng thái online cho BẠN BÈ (không phát cho toàn hệ thống)
-            var friendGroups = (await GetFriendIdsAsync(userId)).Select(UserGroup).ToList();
-            if (friendGroups.Count > 0)
-                await Clients.Groups(friendGroups).SendAsync("UserOnlineChanged", userId, true, null);
+                // Chỉ báo trạng thái online cho BẠN BÈ (không phát cho toàn hệ thống)
+                var friendGroups = (await GetFriendIdsAsync(userId)).Select(UserGroup).ToList();
+                if (friendGroups.Count > 0)
+                    await Clients.Groups(friendGroups).SendAsync("UserOnlineChanged", userId, true, null);
 
-            await MarkPendingAsDeliveredAsync(userId);
+                await MarkPendingAsDeliveredAsync(userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi cập nhật presence khi user {UserId} kết nối", userId);
+            }
         }
 
         await base.OnConnectedAsync();
@@ -95,13 +111,31 @@ public class ChatHub : Hub
 
         if (lastConnection)
         {
-            var lastSeen = DateTime.UtcNow;
-            await _context.Users.Where(u => u.Id == userId)
-                .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsOnline, false).SetProperty(u => u.LastSeenAt, (DateTime?)lastSeen));
+            try
+            {
+                var lastSeen = DateTime.UtcNow;
+                await _context.Users.Where(u => u.Id == userId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsOnline, false)
+                                              .SetProperty(u => u.LastSeenAt, (DateTime?)lastSeen));
 
-            var friendGroups = (await GetFriendIdsAsync(userId)).Select(UserGroup).ToList();
-            if (friendGroups.Count > 0)
-                await Clients.Groups(friendGroups).SendAsync("UserOnlineChanged", userId, false, lastSeen);
+                // User vừa kết nối lại trong lúc ta ghi DB => không báo offline sai
+                if (!IsOnline(userId))
+                {
+                    var friendGroups = (await GetFriendIdsAsync(userId)).Select(UserGroup).ToList();
+                    if (friendGroups.Count > 0)
+                        await Clients.Groups(friendGroups).SendAsync("UserOnlineChanged", userId, false, lastSeen);
+                }
+                else
+                {
+                    // Đã online lại: khôi phục cờ IsOnline vừa bị ghi đè
+                    await _context.Users.Where(u => u.Id == userId)
+                        .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsOnline, true));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi cập nhật presence khi user {UserId} ngắt kết nối", userId);
+            }
         }
 
         await base.OnDisconnectedAsync(exception);
@@ -114,28 +148,36 @@ public class ChatHub : Hub
             m.SenderId != userId && m.Status == "Sent" &&
             _context.ConversationMembers.Any(cm => cm.ConversationId == m.ConversationId && cm.UserId == userId));
 
-        var rows = await pending.Select(m => new { m.ConversationId, m.SenderId }).Distinct().ToListAsync();
+        // Chốt mốc Id để tin đến sau không bị đánh dấu Delivered mà không được báo cho người gửi
+        var upToId = await pending.MaxAsync(m => (long?)m.Id);
+        if (upToId == null) return;
+
+        var batch = pending.Where(m => m.Id <= upToId);
+
+        var rows = await batch.Select(m => new { m.ConversationId, m.SenderId }).Distinct().ToListAsync();
         if (rows.Count == 0) return;
 
-        await pending.ExecuteUpdateAsync(s => s.SetProperty(m => m.Status, "Delivered"));
+        await batch.ExecuteUpdateAsync(s => s.SetProperty(m => m.Status, "Delivered"));
         foreach (var r in rows)
             await Clients.Group(UserGroup(r.SenderId)).SendAsync("MessagesDelivered", r.ConversationId, userId);
     }
 
-    // 1. Client gọi để gửi tin nhắn
+    // ------------------------------------------------------------ 1. Gửi tin
     public async Task SendMessage(Guid conversationId, string type, string? content, string? fileUrl, string? fileName)
     {
         var userId = GetCurrentUserId();
 
         // ---- Kiểm tra dữ liệu đầu vào ----
-        type = (type ?? string.Empty).Trim().ToLowerInvariant();
-        if (!AllowedTypes.Contains(type)) throw new HubException("Loại tin nhắn không hợp lệ.");
+        if (!TryParseType(type, out var kind))
+            throw new HubException("Loại tin nhắn không hợp lệ.");
+        var typeValue = kind.ToString().ToLowerInvariant(); // lưu DB dạng "text" | "image" | "file"
 
         content = content?.Trim();
-        if (content is { Length: > MaxContentLength }) throw new HubException($"Tin nhắn tối đa {MaxContentLength} ký tự.");
+        if (content is { Length: > MaxContentLength })
+            throw new HubException($"Tin nhắn tối đa {MaxContentLength} ký tự.");
 
         long? fileSize = null;
-        if (type == "text")
+        if (kind == MessageType.Text)
         {
             if (string.IsNullOrEmpty(content)) throw new HubException("Tin nhắn không được để trống.");
             fileUrl = null;
@@ -145,7 +187,8 @@ public class ChatHub : Hub
         {
             fileSize = GetUploadSize(fileUrl) ?? throw new HubException("File đính kèm không hợp lệ.");
             fileName = string.IsNullOrWhiteSpace(fileName) ? Path.GetFileName(fileUrl!) : fileName.Trim();
-            if (fileName.Length > 255) fileName = fileName[..255];
+            if (fileName.Length > MaxFileNameLength) fileName = fileName[..MaxFileNameLength];
+            if (string.IsNullOrWhiteSpace(content)) content = null;
         }
 
         // ---- Kiểm tra quyền ----
@@ -168,7 +211,7 @@ public class ChatHub : Hub
         {
             ConversationId = conversationId,
             SenderId = userId,
-            Type = type,
+            Type = typeValue,
             Content = content,
             FileUrl = fileUrl,
             FileName = fileName,
@@ -192,7 +235,7 @@ public class ChatHub : Hub
             await Clients.Group(UserGroup(userId)).SendAsync("MessageDelivered", conversationId, message.Id);
     }
 
-    // 2. Client gọi khi mở hội thoại để đánh dấu Đã xem
+    // ------------------------------------------------------------ 2. Đã xem
     public async Task MarkAsRead(Guid conversationId)
     {
         var userId = GetCurrentUserId();
@@ -220,10 +263,30 @@ public class ChatHub : Hub
             .SendAsync("MessagesSeen", conversationId, userId, lastMsgId.Value);
     }
 
-    // 3. (Tùy chọn) Hiệu ứng "đang nhập..."
+    // ------------------------------------------------------------ 3. Đang nhập...
     public async Task Typing(Guid conversationId, bool isTyping)
     {
         var userId = GetCurrentUserId();
+
+        // Throttle theo từng kết nối: Context.Items tự được dọn khi kết nối đóng.
+        // SignalR xử lý tuần tự các lời gọi của 1 kết nối nên không cần lock.
+        if (!Context.Items.TryGetValue(TypingKey, out var obj) || obj is not Dictionary<Guid, long> lastSent)
+        {
+            lastSent = new Dictionary<Guid, long>();
+            Context.Items[TypingKey] = lastSent;
+        }
+
+        if (isTyping)
+        {
+            var now = Environment.TickCount64;
+            if (lastSent.TryGetValue(conversationId, out var prev) && now - prev < TypingThrottleMs) return;
+            lastSent[conversationId] = now;
+        }
+        else
+        {
+            lastSent.Remove(conversationId); // "ngừng gõ" luôn được gửi đi
+        }
+
         var memberIds = await _context.ConversationMembers.AsNoTracking()
             .Where(cm => cm.ConversationId == conversationId).Select(cm => cm.UserId).ToListAsync();
         if (!memberIds.Contains(userId)) return;
@@ -233,7 +296,18 @@ public class ChatHub : Hub
             await Clients.Groups(groups).SendAsync("UserTyping", conversationId, userId, isTyping);
     }
 
-    // ---------------------------------------------------------------- helpers
+    // ------------------------------------------------------------ helpers
+    private static bool TryParseType(string? raw, out MessageType result)
+    {
+        result = default;
+        raw = raw?.Trim();
+        // All(char.IsLetter): chặn chuỗi số như "1" mà Enum.TryParse vẫn chấp nhận
+        return !string.IsNullOrEmpty(raw)
+            && raw.All(char.IsLetter)
+            && Enum.TryParse(raw, ignoreCase: true, out result)
+            && Enum.IsDefined(result);
+    }
+
     private static MessageDto ToDto(Message m, bool mine) => new()
     {
         Id = m.Id,
@@ -253,7 +327,8 @@ public class ChatHub : Hub
     private long? GetUploadSize(string? fileUrl)
     {
         const string prefix = "/uploads/";
-        if (string.IsNullOrWhiteSpace(fileUrl) || fileUrl.Length > 300 || !fileUrl.StartsWith(prefix)) return null;
+        if (string.IsNullOrWhiteSpace(fileUrl) || fileUrl.Length > 300
+            || !fileUrl.StartsWith(prefix, StringComparison.Ordinal)) return null;
 
         var name = fileUrl[prefix.Length..];
         if (name.Length == 0 || name != Path.GetFileName(name) || name.Contains("..")) return null;
@@ -263,4 +338,3 @@ public class ChatHub : Hub
         return info.Exists ? info.Length : null;
     }
 }
-

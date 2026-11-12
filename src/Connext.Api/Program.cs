@@ -1,13 +1,22 @@
 ﻿using Connext.Api.Hubs;
 using Connext.Api.Services;
+// using Connext.Data; // Bỏ comment nếu AppDbContext nằm trong namespace này sau khi chuyển vào src/Connext.Data
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.OpenApi.Models; // Swashbuckle 6.x. Nếu dùng Swashbuckle 10+ thì namespace là Microsoft.OpenApi
 using System.Text;
 using System.Threading.RateLimiting;
 
+// Phải tạo TRƯỚC CreateBuilder: nếu wwwroot chưa tồn tại lúc build thì WebRootPath = null
+// và UseStaticFiles sẽ không phục vụ được file upload.
+Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads"));
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Token JWT nằm trên query string của hub => không để log "Request starting ...?access_token=..." lộ token.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 
 // 1. Cấu hình DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -15,6 +24,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // 2. Cấu hình CORS
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+if (allowedOrigins.Length == 0 && !builder.Environment.IsDevelopment())
+    throw new InvalidOperationException("Cors:AllowedOrigins chưa được cấu hình. Cần ít nhất 1 origin (AllowCredentials không dùng được với '*').");
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", policy =>
@@ -31,6 +43,7 @@ var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new ArgumentNullException("Jwt:Key", "Jwt:Key chưa được cấu hình trong appsettings.json.");
 if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
     throw new InvalidOperationException("Jwt:Key phải dài tối thiểu 32 byte. Đặt bằng User Secrets hoặc biến môi trường Jwt__Key.");
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -47,7 +60,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
 
-        // Đọc token từ query string cho SignalR
+        // WebSocket của trình duyệt không gửi được header Authorization
+        // => đọc token từ query string, CHỈ cho đúng path của hub.
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
@@ -64,9 +78,41 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddControllers();
-builder.Services.AddSignalR();
+
+builder.Services.AddSignalR(options =>
+{
+    options.MaximumReceiveMessageSize = 64 * 1024; // Chặn payload lớn ngay từ tầng SignalR
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+});
+
+// 4. Swagger có nút Authorize (Bearer JWT) để test các endpoint cần đăng nhập
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Connext API", Version = "v1" });
+
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Dán JWT vào đây (không cần gõ chữ 'Bearer')."
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<JwtHelper>();
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -89,13 +135,6 @@ if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
     scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
-}
-
-// Tạo thư mục wwwroot/uploads tự động nếu chưa có
-var uploadsPath = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads");
-if (!Directory.Exists(uploadsPath))
-{
-    Directory.CreateDirectory(uploadsPath);
 }
 
 if (app.Environment.IsDevelopment())
@@ -121,3 +160,6 @@ app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();
+
+// Cho phép WebApplicationFactory<Program> trong project test tích hợp
+public partial class Program { }
