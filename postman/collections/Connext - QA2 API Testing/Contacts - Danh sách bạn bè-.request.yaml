@@ -1,0 +1,29 @@
+$kind: http-request
+name: Contacts - Danh sách bạn bè.
+url: "{{baseUrl}}/api/Contacts/friends"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONTACT_01 - Lay danh sach ban be\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Response la danh sach JSON\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data).to.be.an(\"array\");\r
+
+      });"
+    language: text/javascript
+order: 8000

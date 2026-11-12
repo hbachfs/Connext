@@ -1,0 +1,31 @@
+$kind: http-request
+name: Contacts - JWT giả mạo.
+url: "{{baseUrl}}/api/Contacts/friends"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: fake.jwt.token
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_SEC_02 - Tu choi JWT gia mao\", function () {\r
+
+      \    pm.response.to.have.status(401);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Khong tra ve du lieu ban be\", function () {\r
+
+      \    const body = pm.response.text();\r
+
+      \r
+
+      \    pm.expect(body).to.not.include('\"phoneNumber\"');\r
+
+      \    pm.expect(body).to.not.include('\"displayName\"');\r
+
+      });"
+    language: text/javascript
+order: 7000

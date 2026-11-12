@@ -1,0 +1,62 @@
+$kind: http-request
+name: Register - Đăng ký tài khoản.
+url: "{{baseUrl}}/api/Auth/register"
+method: POST
+body:
+  type: json
+  content: "\r
+
+    {\r
+
+    \  \"phoneNumber\": \"0912345670\",\r
+
+    \  \"password\": \"Test123456\",\r
+
+    \  \"displayName\": \"QA2 Test User 2\"\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_AUTH_01 - Dang ky tai khoan hop le\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Response co JWT Token\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.token).to.be.a(\"string\");\r
+
+      \    pm.expect(data.token.length).to.be.greaterThan(0);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Response co thong tin tai khoan\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data).to.have.property(\"userId\");\r
+
+      \    pm.expect(data.phoneNumber).to.eql(\r
+
+      \        pm.request.body.raw\r
+
+      \            ? JSON.parse(pm.request.body.raw).phoneNumber\r
+
+      \            : \"\"\r
+
+      \    );\r
+
+      });"
+    language: text/javascript
+order: 2000
