@@ -21,6 +21,69 @@
 - [ ] Gọi thoại/video 1-1 bằng WebRTC, chia sẻ màn hình (FR-10)
 - [ ] Ghim tin nhắn, bình chọn, giao việc (FR-11, FR-12, FR-13)
 
+## API danh bạ và hội thoại
+
+Các API dưới đây yêu cầu JWT Bearer:
+
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| `POST` | `/api/contacts/request` | Gửi lời mời kết bạn theo số điện thoại |
+| `GET` | `/api/contacts/requests` | Trả về `received` và `sent` cho các lời mời đang chờ |
+| `POST` | `/api/contacts/respond` | Chấp nhận hoặc từ chối lời mời theo `requestId` |
+| `DELETE` | `/api/contacts/friends/{userId}` | Hủy kết bạn |
+| `POST` / `DELETE` | `/api/contacts/blocks/{userId}` | Chặn hoặc bỏ chặn; chặn sẽ xóa quan hệ bạn bè/lời mời hiện tại |
+| `GET` | `/api/conversations` | Danh sách hội thoại, tin nhắn cuối và số tin chưa đọc |
+| `POST` | `/api/conversations/groups` | Tạo nhóm; cần ít nhất 3 người tính cả người tạo và các thành viên khác phải là bạn |
+| `GET` | `/api/conversations/{id}/messages?pageSize=50` | Lấy tin nhắn; `pageSize` từ 1 đến tối đa 50 |
+| `POST` | `/api/conversations/{id}/read` | Cập nhật mốc đã đọc để tính số tin chưa đọc |
+
+Kết nối thời gian thực dùng SignalR tại `/hubs/chat`, xác thực JWT qua
+`access_token`. Hub hỗ trợ `JoinConversation`, `SendMessage`, `Typing` và
+`AcknowledgeDelivered`; các sự kiện client nhận gồm `ConversationCreated`,
+`ReceiveMessage`, `Typing`, `MessageDelivered` và `OnlineChanged`. Loại tin nhắn
+được giới hạn trong `Text`, `Image`, `File`; nội dung tối đa 4.000 ký tự.
+
+Sau khi cấu hình SQL Server, áp dụng schema mới bằng:
+`dotnet ef database update --project src/Connext.Data --startup-project src/Connext.Api`.
+
+### Auth, CORS và file
+
+- Đăng ký chấp nhận email tùy chọn; người dùng có thể cập nhật email tại
+  `PUT /api/users/me` trước khi yêu cầu đặt lại mật khẩu.
+- `POST /api/auth/forgot-password`, `POST /api/auth/verify-otp`,
+  `POST /api/auth/reset-password` dùng OTP 6 số (hết hạn sau 10 phút, tối đa 5
+  lần nhập sai, gửi lại sau 60 giây). SMTP cần cấu hình `Smtp:Host`,
+  `Smtp:Port`, `Smtp:Username`, `Smtp:Password`, `Smtp:From` và `Smtp:EnableSsl`
+  qua User Secrets hoặc biến môi trường.
+- `GET/PUT /api/users/me` đọc/cập nhật hồ sơ; `PUT /api/users/me/password` đổi
+  mật khẩu có xác minh mật khẩu hiện tại; `POST /api/auth/logout` đặt trạng thái
+  offline.
+- CORS chỉ cho phép các origin khai báo trong `Cors:AllowedOrigins`, ví dụ
+  `Cors__AllowedOrigins__0=https://localhost:5001`; danh sách mặc định rỗng.
+- Số điện thoại Việt Nam được chuẩn hóa về E.164 (`+84...`) khi đăng ký, đăng
+  nhập và tìm kiếm. Migration chuẩn hóa dữ liệu hiện có và dừng nếu phát hiện
+  số trùng sau chuẩn hóa.
+- Upload tại `POST /api/conversations/{id}/files`; ảnh tối đa 100 MB, video
+  MP4 tối đa 1 GB, tài liệu tối đa 100 MB. Chỉ cho phép JPG/PNG/GIF/WebP,
+  MP4/PDF/TXT/DOCX/XLSX/PPTX. MIME được xác định từ phần mở rộng và chữ ký
+  nội dung; file được tải xuống dạng attachment qua API có kiểm tra thành viên.
+  `GET /api/conversations/{id}/media?kind=Image|File|Link` trả kho media.
+- MinIO cần `Minio:Endpoint`, `Minio:AccessKey`, `Minio:SecretKey`,
+  `Minio:Bucket` và `Minio:UseSSL` qua User Secrets/biến môi trường. Bucket
+  được tạo riêng tư tự động; không tạo public URL.
+
+Ví dụ thiết lập secrets cục bộ (thay bằng thông tin SMTP/MinIO của môi trường):
+
+```powershell
+dotnet user-secrets set "Cors:AllowedOrigins:0" "https://localhost:5001" --project src/Connext.Api
+dotnet user-secrets set "Minio:AccessKey" "your-minio-user" --project src/Connext.Api
+dotnet user-secrets set "Minio:SecretKey" "your-minio-password" --project src/Connext.Api
+dotnet user-secrets set "Smtp:Host" "smtp.example.com" --project src/Connext.Api
+dotnet user-secrets set "Smtp:From" "noreply@example.com" --project src/Connext.Api
+dotnet user-secrets set "Smtp:Username" "your-smtp-user" --project src/Connext.Api
+dotnet user-secrets set "Smtp:Password" "your-smtp-password" --project src/Connext.Api
+```
+
 ## Công nghệ
 
 | Tầng | Công nghệ |

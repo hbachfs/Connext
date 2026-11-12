@@ -1,5 +1,7 @@
 using Connext.Api.Services;
 using Connext.Shared.DTOs.Auth;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Connext.Api.Controllers;
@@ -57,5 +59,14 @@ public class AuthController : ControllerBase
 
         return Ok(result);
     }
-}
 
+    [Authorize]
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Unauthorized();
+        await _authService.LogoutAsync(userId);
+        return NoContent();
+    }
+}

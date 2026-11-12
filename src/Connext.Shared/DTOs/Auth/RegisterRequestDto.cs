@@ -4,6 +4,10 @@ namespace Connext.Shared.DTOs.Auth;
 
 public class RegisterRequestDto
 {
+    [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
+    [MaxLength(254)]
+    public string? Email { get; set; }
+
     [Required(ErrorMessage = "Số điện thoại là bắt buộc.")]
     [Phone(ErrorMessage = "Số điện thoại không hợp lệ.")]
     public string PhoneNumber { get; set; } = string.Empty;
@@ -16,4 +20,3 @@ public class RegisterRequestDto
     [MaxLength(100, ErrorMessage = "Tên hiển thị tối đa 100 ký tự.")]
     public string DisplayName { get; set; } = string.Empty;
 }
-
