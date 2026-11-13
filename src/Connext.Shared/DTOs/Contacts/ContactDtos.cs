@@ -33,3 +33,19 @@ public class FriendshipRespondDto
     public Guid RequestId { get; set; }
     public bool Accept { get; set; }
 }
+
+public class FriendshipRequestResponseDto
+{
+    public Guid RequestId { get; set; }
+    public Guid UserId { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+    public string PhoneNumber { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class FriendshipRequestsDto
+{
+    public List<FriendshipRequestResponseDto> Received { get; set; } = [];
+    public List<FriendshipRequestResponseDto> Sent { get; set; } = [];
+}

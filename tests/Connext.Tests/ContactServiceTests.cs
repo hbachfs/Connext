@@ -3,6 +3,7 @@ using Connext.Api.Services;
 using Connext.Data;
 using Connext.Data.Entities;
 using Connext.Shared.DTOs.Contacts;
+using Connext.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace Connext.Tests;
@@ -21,7 +22,7 @@ public class ContactServiceTests
     private static User CreateUser(string phoneNumber, string displayName) => new()
     {
         Id = Guid.NewGuid(),
-        PhoneNumber = phoneNumber,
+        PhoneNumber = PhoneNumberNormalizer.Normalize(phoneNumber),
         DisplayName = displayName,
         PasswordHash = "test-hash"
     };
@@ -139,6 +140,77 @@ public class ContactServiceTests
         Assert.True(await service.RespondToRequestAsync(addressee.Id, request.Id, accept: true));
         Assert.False(await service.RespondToRequestAsync(addressee.Id, request.Id, accept: false));
         Assert.Equal(FriendshipStatus.Accepted, request.Status);
+    }
+
+    [Fact]
+    public async Task DeclinedRequest_CanBeSentAgain()
+    {
+        using var context = CreateInMemoryDbContext();
+        var requester = CreateUser("0900000001", "Requester");
+        var addressee = CreateUser("0900000002", "Addressee");
+        context.Users.AddRange(requester, addressee);
+        await context.SaveChangesAsync();
+        var service = new ContactService(context);
+
+        Assert.True(await service.SendFriendRequestAsync(requester.Id, addressee.PhoneNumber));
+        var request = await context.Friendships.SingleAsync();
+        Assert.True(await service.RespondToRequestAsync(addressee.Id, request.Id, accept: false));
+        Assert.True(await service.SendFriendRequestAsync(requester.Id, addressee.PhoneNumber));
+
+        Assert.Equal(FriendshipStatus.Pending, request.Status);
+        Assert.Equal(requester.Id, request.RequesterId);
+    }
+
+    [Fact]
+    public async Task GetRequestsAsync_ReturnsReceivedAndSentRequests()
+    {
+        using var context = CreateInMemoryDbContext();
+        var user = CreateUser("0900000001", "Current");
+        var incoming = CreateUser("0900000002", "Incoming");
+        var outgoing = CreateUser("0900000003", "Outgoing");
+        context.Users.AddRange(user, incoming, outgoing);
+        context.Friendships.AddRange(
+            CreateFriendship(incoming, user, FriendshipStatus.Pending),
+            CreateFriendship(user, outgoing, FriendshipStatus.Pending));
+        await context.SaveChangesAsync();
+
+        var requests = await new ContactService(context).GetRequestsAsync(user.Id);
+
+        Assert.Equal(incoming.Id, Assert.Single(requests.Received).UserId);
+        Assert.Equal(outgoing.Id, Assert.Single(requests.Sent).UserId);
+    }
+
+    [Fact]
+    public async Task BlockUser_RemovesFriendshipAndHidesBlockedUser()
+    {
+        using var context = CreateInMemoryDbContext();
+        var blocker = CreateUser("0900000001", "Blocker");
+        var blocked = CreateUser("0900000002", "Blocked");
+        context.Users.AddRange(blocker, blocked);
+        context.Friendships.Add(CreateFriendship(blocker, blocked, FriendshipStatus.Accepted));
+        await context.SaveChangesAsync();
+        var service = new ContactService(context);
+
+        Assert.True(await service.BlockUserAsync(blocker.Id, blocked.Id));
+        Assert.Empty(await service.SearchUsersAsync(blocked.Id, "Blocker"));
+        Assert.Empty(await service.GetFriendsAsync(blocker.Id));
+        Assert.False(await service.SendFriendRequestAsync(blocked.Id, blocker.PhoneNumber));
+        Assert.True(await service.UnblockUserAsync(blocker.Id, blocked.Id));
+        Assert.Single(await service.SearchUsersAsync(blocked.Id, "Blocker"));
+    }
+
+    [Fact]
+    public async Task RemoveFriendAsync_DeletesOnlyAcceptedFriendship()
+    {
+        using var context = CreateInMemoryDbContext();
+        var user = CreateUser("0900000001", "User");
+        var friend = CreateUser("0900000002", "Friend");
+        context.Users.AddRange(user, friend);
+        context.Friendships.Add(CreateFriendship(user, friend, FriendshipStatus.Accepted));
+        await context.SaveChangesAsync();
+
+        Assert.True(await new ContactService(context).RemoveFriendAsync(user.Id, friend.Id));
+        Assert.Empty(await context.Friendships.ToListAsync());
     }
 
     [Fact]

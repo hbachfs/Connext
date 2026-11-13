@@ -68,5 +68,24 @@ public class JwtTokenServiceTests
         Assert.NotNull(nameClaim);
         Assert.Equal(user.DisplayName, nameClaim.Value);
     }
-}
 
+    [Fact]
+    public void PasswordResetToken_UsesSeparateAudienceAndValidatesOnlyAsResetGrant()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            PhoneNumber = "+84901234567",
+            DisplayName = "Test",
+            PasswordHash = "hashed"
+        };
+        var token = _jwtTokenService.GeneratePasswordResetToken(
+            user, Guid.NewGuid().ToString("N"), DateTime.UtcNow.AddMinutes(5));
+
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
+
+        Assert.Contains("ConnextPasswordReset", jwt.Audiences);
+        Assert.DoesNotContain("ConnextWeb", jwt.Audiences);
+        Assert.NotNull(_jwtTokenService.ValidatePasswordResetToken(token));
+    }
+}

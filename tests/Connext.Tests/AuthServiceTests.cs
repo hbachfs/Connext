@@ -2,6 +2,7 @@ using Connext.Api.Services;
 using Connext.Data;
 using Connext.Data.Entities;
 using Connext.Shared.DTOs.Auth;
+using Connext.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Xunit;
@@ -57,10 +58,11 @@ public class AuthServiceTests
         // Assert
         Assert.NotNull(response);
         Assert.NotEmpty(response.Token);
-        Assert.Equal(request.PhoneNumber, response.PhoneNumber);
+        Assert.Equal(PhoneNumberNormalizer.Normalize(request.PhoneNumber), response.PhoneNumber);
         Assert.Equal(request.DisplayName, response.DisplayName);
 
-        var savedUser = await context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber);
+        var savedUser = await context.Users.FirstOrDefaultAsync(u =>
+            u.PhoneNumber == PhoneNumberNormalizer.Normalize(request.PhoneNumber));
         Assert.NotNull(savedUser);
         Assert.Equal(request.DisplayName, savedUser.DisplayName);
         Assert.NotEqual(request.Password, savedUser.PasswordHash);
@@ -78,7 +80,7 @@ public class AuthServiceTests
         var existingUser = new User
         {
             Id = Guid.NewGuid(),
-            PhoneNumber = "0987654321",
+            PhoneNumber = PhoneNumberNormalizer.Normalize("0987654321"),
             DisplayName = "Existing User",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Password123!")
         };
@@ -100,7 +102,7 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task LoginAsync_ValidCredentials_ReturnsAuthResponseAndSetsIsOnline()
+    public async Task LoginAsync_ValidCredentials_ReturnsAuthResponseWithoutMarkingUserOnline()
     {
         // Arrange
         using var context = CreateInMemoryDbContext();
@@ -111,7 +113,7 @@ public class AuthServiceTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            PhoneNumber = "0912345678",
+            PhoneNumber = PhoneNumberNormalizer.Normalize("0912345678"),
             DisplayName = "Nguyen Van B",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(plainPassword),
             IsOnline = false
@@ -136,8 +138,8 @@ public class AuthServiceTests
 
         var updatedUser = await context.Users.FindAsync(user.Id);
         Assert.NotNull(updatedUser);
-        Assert.True(updatedUser.IsOnline);
-        Assert.NotNull(updatedUser.LastSeen);
+        Assert.False(updatedUser.IsOnline);
+        Assert.Null(updatedUser.LastSeen);
     }
 
     [Fact]
@@ -151,7 +153,7 @@ public class AuthServiceTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            PhoneNumber = "0912345678",
+            PhoneNumber = PhoneNumberNormalizer.Normalize("0912345678"),
             DisplayName = "Nguyen Van B",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("CorrectPassword123!"),
             IsOnline = false
@@ -192,5 +194,25 @@ public class AuthServiceTests
         // Assert
         Assert.Null(response);
     }
-}
 
+    [Fact]
+    public async Task LogoutAsync_SetsUserOfflineAndUpdatesLastSeen()
+    {
+        using var context = CreateInMemoryDbContext();
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            PhoneNumber = "+84901234567",
+            DisplayName = "Online",
+            PasswordHash = "test-hash",
+            IsOnline = true
+        };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        await new AuthService(context, CreateJwtTokenService()).LogoutAsync(user.Id);
+
+        Assert.False(user.IsOnline);
+        Assert.NotNull(user.LastSeen);
+    }
+}
