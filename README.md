@@ -43,6 +43,12 @@ Kết nối thời gian thực dùng SignalR tại `/hubs/chat`, xác thực JWT
 `ReceiveMessage`, `Typing`, `MessageDelivered` và `OnlineChanged`. Loại tin nhắn
 được giới hạn trong `Text`, `Image`, `File`; nội dung tối đa 4.000 ký tự.
 
+Nginx reverse proxy mẫu nằm tại `deploy/nginx/default.conf`. Cấu hình chuyển
+`/hubs/chat` và các yêu cầu API tới `127.0.0.1:5232` (cổng HTTP trong profile
+Development), bật WebSocket upgrade và tắt access log cho Hub để tránh ghi token
+`access_token` trong URL. Khi triển khai, đổi upstream `connext_api` sang địa chỉ
+và cổng mà Nginx có thể truy cập tới API.
+
 Sau khi cấu hình SQL Server, áp dụng schema mới bằng:
 `dotnet ef database update --project src/Connext.Data --startup-project src/Connext.Api`.
 
