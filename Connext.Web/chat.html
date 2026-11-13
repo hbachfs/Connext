@@ -1,0 +1,450 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+    <link href="css/style.css" rel="stylesheet">
+
+    <title>Trò chuyện - Connext</title>
+</head>
+<body>
+    <div class="app-shell">
+        <div data-include="layouts/sidebar.html"></div>
+        <div class="app-body">
+            <div class="titlebar">CWF - Nguyễn Văn A</div>
+            <div class="app-content">
+                <section class="list-panel">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <label class="search">
+                            <img src="assets/search.svg" width="18" alt="">
+                            <input type="text" placeholder="Tìm cuộc trò chuyện...">
+                        </label>
+                        <button type="button" class="icon-btn" title="Thêm bạn" onclick="openModal('addFriendModal')"><img src="assets/add-friend.svg" width="24" alt="Thêm bạn"></button>
+                        <button type="button" class="icon-btn" title="Tạo nhóm" onclick="openModal('addGroupModal')"><img src="assets/add-group.svg" width="24" alt="Tạo nhóm"></button>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="tab-pill active" onclick="setConvFilter('all')">Tất cả</button>
+                        <button type="button" class="tab-pill" id="unreadPill" onclick="setConvFilter('unread')">Chưa đọc</button>
+                        <button type="button" class="tab-pill" onclick="setConvFilter('read')">Đã đọc</button>
+                    </div>
+                    <div class="mt-3" id="convList"></div>
+                </section>
+
+
+                <section class="chat-panel">
+                    <div class="chat-head">
+                        <div class="avatar" id="chatAvatar"></div>
+                        <div>
+                            <div class="fw-bold small" id="chatName"></div>
+                            <div class="online-text" id="chatStatus"></div>
+                        </div>
+                        <div class="ms-auto d-flex gap-3">
+                            <button type="button" class="icon-btn" title="Gọi thoại" onclick="handleCall()"><img src="assets/phone.svg" height="21" alt="Gọi thoại"></button>
+                            <button type="button" class="icon-btn" title="Gọi video" onclick="handleVideoCall()"><img src="assets/camera.svg" height="24" alt="Gọi video"></button>
+                            <button type="button" class="icon-btn" title="Tìm tin nhắn"><img src="assets/chat-search.svg" height="22" alt="Tìm"></button>
+                        </div>
+                    </div>
+                    <div class="chat-body">
+                        <div class="load-status hidden" id="loadStatus"></div>
+                        <div class="day-chip">Hôm nay</div>
+                        <div class="msg-status" id="msgStatus"></div>
+                    </div>
+                    <div class="chat-input">
+                        <input type="text" id="msgInput" class="chat-box" placeholder="Nhập tin nhắn...">
+                        <input type="file" id="fileInput" class="hidden">
+                        <button type="button" class="icon-btn" title="Đính kèm" onclick="handleAttach()"><i class="bi bi-paperclip"></i></button>
+                        <button type="button" class="icon-btn" title="Gửi" onclick="sendMessage()"><i class="bi bi-send-fill"></i></button>
+                    </div>
+
+                </section>
+            </div>
+        </div>
+    </div>
+    <div data-include="layouts/add-friend.html"></div>
+    <div data-include="layouts/add-group.html"></div>
+    <div class="conv-menu hidden" id="convMenu">
+        <button type="button" onclick="handlePinConv(menuConvId)">Ghim hội thoại</button>
+        <button type="button" onclick="handleAddToGroup(menuConvId)">Thêm vào nhóm</button>
+        <button type="button" class="danger" onclick="handleDeleteConv(menuConvId)">Xóa hội thoại</button>
+    </div>
+    <div class="image-viewer hidden" id="imageViewer" onclick="closeModal(event)">
+        <button type="button" class="image-viewer-close" title="Đóng" onclick="hideModal('imageViewer')"><i class="bi bi-x-lg"></i></button>
+        <img id="imageViewerImg" alt="">
+    </div>
+    <script src="js/common.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/fake-chat-data.js"></script>
+    <script>
+        function handleOpenConversation() { /* BE tải tin nhắn của cuộc trò chuyện */ }
+        function handleCall() { /* BE gọi thoại */ }
+        function handleVideoCall() { /* BE gọi video */ }
+        function currentTime() {
+            const now = new Date();
+            return now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
+        }
+
+        function addMyMessage(m) {
+            const all = fakeConversations[currentConv].messages;
+            m.id = all.length + 1;
+            m.mine = true;
+            m.time = currentTime();
+            all.push(m);
+
+            chatBody.insertBefore(createMessage(m), document.getElementById('msgStatus'));
+            renderConvList();
+            setMessageStatus('sent');
+            chatBody.scrollTop = chatBody.scrollHeight;
+            handleSendMessage(m);
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('msgInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            addMyMessage({ content: text });
+            input.value = '';
+        }
+        function openImageViewer(url, name) {
+            const img = document.getElementById('imageViewerImg');
+            img.src = url;
+            img.alt = name;
+            document.getElementById('imageViewer').classList.remove('hidden');
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') hideModal('imageViewer');
+        });
+
+        function fillMessageContent(msg, m) {
+            if (m.type === 'image') {
+                const img = document.createElement('img');
+                img.src = m.fileUrl;
+                img.alt = m.fileName;
+                img.className = 'msg-image';
+                img.onclick = () => openImageViewer(m.fileUrl, m.fileName);
+                msg.appendChild(img);
+            }
+            else if (m.type === 'file') {
+                const link = document.createElement('a');
+                link.href = m.fileUrl;
+                link.download = m.fileName;
+                link.className = 'msg-file';
+
+                const icon = document.createElement('i');
+                icon.className = 'bi bi-file-earmark-text';
+
+                const name = document.createElement('span');
+                name.textContent = m.fileName;
+
+                link.append(icon, name);
+                msg.appendChild(link);
+            } else {
+                msg.textContent = m.content;
+            }
+        }
+
+        function handleAttach() {
+            document.getElementById('fileInput').click();
+        }
+
+        document.getElementById('fileInput').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const isImage = file.type.startsWith('image/');
+            addMyMessage({
+                type: isImage ? 'image' : 'file',
+                fileName: file.name,
+                fileUrl: URL.createObjectURL(file), // BE: thay bằng đường dẫn sau khi tải lên server
+                content: isImage ? '[Hình ảnh]' : file.name
+            });
+            e.target.value = '';
+        }); function setMessageStatus(status) {
+            const el = document.getElementById('msgStatus');
+            el.textContent = '';
+            if (!status) return;
+
+            if (status === 'seen') {
+                const avatar = document.createElement('span');
+                avatar.className = 'msg-avatar';
+                avatar.title = 'Đã xem';
+                el.appendChild(avatar);
+            } else {
+                el.textContent = status === 'sent' ? 'Đã gửi' : 'Đã nhận';
+            }
+        }
+
+        function handleSendMessage(text) {
+            // Test trước sau BE thay bằng SignalR
+            setTimeout(() => setMessageStatus('delivered'), 1000);
+            setTimeout(() => setMessageStatus('seen'), 3000);
+        }
+
+        const PAGE_SIZE = 10;
+        const chatBody = document.querySelector('.chat-body');
+        let oldestId = null;
+        let hasMore = true;
+        let isLoading = false;
+        let currentConv = null;
+        let loadToken = 0;
+
+        function fetchMessages(beforeId) {
+            const all = fakeConversations[currentConv].messages;
+            const older = beforeId === null
+                ? all
+                : all.filter(m => m.id < beforeId);
+            return older.slice(-PAGE_SIZE);
+        }
+        function createMessage(m) {
+            const msg = document.createElement('div');
+            msg.className = m.mine ? 'msg msg-out' : 'msg msg-in';
+            fillMessageContent(msg, m);
+
+            const small = document.createElement('small');
+            small.textContent = m.time;
+            msg.appendChild(small);
+
+            if (m.mine) return msg;
+
+            const row = document.createElement('div');
+            row.className = 'msg-row';
+            const avatar = document.createElement('span');
+            avatar.className = 'msg-avatar';
+            row.append(avatar, msg);
+            return row;
+        }
+
+        function prependMessages(list) {
+            const firstLoad = oldestId === null;
+            const oldHeight = chatBody.scrollHeight;
+
+            chatBody.querySelector('.day-chip').after(...list.map(createMessage));
+
+            if (list.length > 0) oldestId = list[0].id;
+            if (list.length < PAGE_SIZE) hasMore = false;
+
+            chatBody.scrollTop = firstLoad
+                ? chatBody.scrollHeight
+                : chatBody.scrollHeight - oldHeight;
+        }
+
+        function loadOlder() {
+            if (isLoading || !hasMore) return;
+            isLoading = true;
+            const token = loadToken;
+
+            const status = document.getElementById('loadStatus');
+            status.textContent = 'Đang tải...';
+            status.classList.remove('hidden');
+
+            setTimeout(() => {
+                if (token !== loadToken) return;
+
+                const wasFirstLoad = oldestId === null;
+                status.classList.add('hidden');
+                prependMessages(fetchMessages(oldestId));
+                isLoading = false;
+
+                if (!hasMore && !wasFirstLoad) {
+                    status.textContent = 'Đã hết tin nhắn';
+                    status.classList.remove('hidden');
+                } else if (hasMore && chatBody.scrollHeight <= chatBody.clientHeight) {
+                    loadOlder();
+                }
+            }, 500);
+        }
+
+        function fillAvatar(el, c) {
+            el.className = ('avatar ' + c.avatarClass).trim();
+            el.textContent = c.letter;
+            if (c.online) {
+                const dot = document.createElement('span');
+                dot.className = 'dot';
+                el.appendChild(dot);
+            }
+        }
+
+        let menuConvId = null;
+
+        function openConvMenu(e, id) {
+            e.stopPropagation();
+
+            const menu = document.getElementById('convMenu');
+            const isOpen = !menu.classList.contains('hidden') && menuConvId === id;
+            menu.classList.add('hidden');
+            if (isOpen) return;
+
+            menuConvId = id;
+            const rect = e.currentTarget.getBoundingClientRect();
+            menu.style.top = (rect.bottom + 4) + 'px';
+            menu.style.left = (rect.left - 4) + 'px';
+            menu.classList.remove('hidden');
+        }
+
+        document.addEventListener('click', () => {
+            document.getElementById('convMenu').classList.add('hidden');
+        });
+
+        function handlePinConv(convId) { /* BE: ghim hội thoại */ }
+        function handleAddToGroup(convId) { /* BE: thêm vào nhóm */ }
+        function handleDeleteConv(convId) { /* BE: xóa hội thoại */ }
+
+        function createConvItem(id) {
+            const c = fakeConversations[id];
+            const last = c.messages[c.messages.length - 1];
+
+            const item = document.createElement('div');
+            item.className = id === currentConv ? 'conv active' : 'conv';
+            if (c.unread > 0) item.classList.add('has-unread');
+            item.onclick = () => openConversation(id);
+            item.innerHTML = `
+                            <div class="avatar"></div>
+                            <div class="conv-info">
+                            <div class="conv-name"><span></span><small></small><button type="button" class="conv-more" title="Tùy chọn"><i class="bi bi-three-dots"></i></button></div>
+                            <div class="conv-last"><span></span></div>
+                            </div>`;
+
+            fillAvatar(item.querySelector('.avatar'), c);
+            item.querySelector('.conv-name span').textContent = c.name;
+            item.querySelector('.conv-name small').textContent = last.time;
+            item.querySelector('.conv-last span').textContent = last.content;
+            item.querySelector('.conv-more').onclick = e => openConvMenu(e, id);
+
+            if (c.unread > 0) {
+                const badge = document.createElement('span');
+                badge.className = 'badge-count';
+                badge.textContent = c.unread;
+                item.querySelector('.conv-last').appendChild(badge);
+            }
+            return item;
+        }
+
+        function updateUnreadTotals() {
+            let total = 0;
+            for (const id in fakeConversations) total += fakeConversations[id].unread;
+
+            document.getElementById('unreadPill').textContent = 'Chưa đọc (' + total + ')';
+
+            const navBadge = document.querySelector('.nav-badge');
+            if (navBadge) {
+                navBadge.textContent = total;
+                navBadge.classList.toggle('hidden', total === 0);
+            }
+        }
+
+        function onLayoutLoaded() {
+            updateUnreadTotals();
+        }
+
+        let convFilter = 'all';
+        let keepVisibleId = null;
+
+        function matchesFilter(id) {
+            const c = fakeConversations[id];
+            if (convFilter === 'unread') return c.unread > 0 || id === keepVisibleId;
+            if (convFilter === 'read') return c.unread === 0;
+            return true;
+        }
+
+        function setConvFilter(filter) {
+            convFilter = filter;
+            keepVisibleId = null;
+            renderConvList();
+        }
+
+        function renderConvList() {
+            const list = document.getElementById('convList');
+            list.textContent = '';
+
+            const ids = Object.keys(fakeConversations).filter(matchesFilter);
+            ids.forEach(id => list.appendChild(createConvItem(id)));
+
+            if (ids.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'conv-empty';
+                empty.textContent = convFilter === 'unread'
+                    ? 'Không có tin nhắn chưa đọc'
+                    : 'Không có cuộc trò chuyện nào';
+                list.appendChild(empty);
+            }
+
+            updateUnreadTotals();
+        }        function updateChatHead(c) {
+            fillAvatar(document.getElementById('chatAvatar'), c);
+            document.getElementById('chatName').textContent = c.name;
+            const chatStatus = document.getElementById('chatStatus');
+            chatStatus.textContent = c.status;
+            chatStatus.className = c.online ? 'online-text' : 'text-muted-cnx small';
+        }
+
+        function formatLastSeen(lastSeen) {
+            const minutes = Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000);
+            if (minutes < 1) return 'Vừa mới hoạt động';
+            if (minutes < 60) return 'Hoạt động ' + minutes + ' phút trước';
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return 'Hoạt động ' + hours + ' giờ trước';
+            return 'Hoạt động ' + Math.floor(hours / 24) + ' ngày trước';
+        }
+
+        // Be gọi hàm này khi ai đó online hoặc offline
+        function setOnline(convId, online, lastSeen) {
+            const c = fakeConversations[convId];
+            c.online = online;
+            c.status = online ? 'Đang hoạt động' : formatLastSeen(lastSeen);
+
+            renderConvList();
+            if (convId === currentConv) updateChatHead(c);
+        }
+
+        function openConversation(convId) {
+            loadToken++;
+            currentConv = convId;
+            oldestId = null;
+            hasMore = true;
+            isLoading = false;
+
+            const c = fakeConversations[convId];
+            if (convFilter === 'unread') keepVisibleId = convId;
+            c.unread = 0;
+            renderConvList();
+            handleOpenConversation();
+
+            updateChatHead(c);
+            chatBody.querySelectorAll('.msg-row, .msg').forEach(el => el.remove());
+            document.getElementById('loadStatus').classList.add('hidden');
+
+            loadOlder();
+            const last = c.messages[c.messages.length - 1];
+            setMessageStatus(last.mine ? 'seen' : null);
+        }
+
+        // BE gọi hàm này khi có tin nhắn mới
+        function receiveMessage(convId, content, time) {
+            const c = fakeConversations[convId];
+            const m = { id: c.messages.length + 1, mine: false, content: content, time: time };
+            c.messages.push(m);
+
+            if (convId === currentConv) {
+                chatBody.insertBefore(createMessage(m), document.getElementById('msgStatus'));
+                setMessageStatus(null);
+                chatBody.scrollTop = chatBody.scrollHeight;
+            } else {
+                c.unread++;
+            }
+            renderConvList();
+        }
+
+        openConversation('test');
+        chatBody.addEventListener('scroll', () => {
+            if (chatBody.scrollTop === 0) loadOlder();
+        });
+
+    </script>
+</body>
+</html>

@@ -12,7 +12,7 @@ namespace Connext.Api.Controllers;
 public class MessagesController : ControllerBase
 {
     private const int MaxPageSize = 50;
-
+    private const int DefaultPageSize = 10;
     private readonly AppDbContext _context;
 
     public MessagesController(AppDbContext context)
@@ -54,6 +54,9 @@ public class MessagesController : ControllerBase
 
         var hasMore = messages.Count > pageSize;
         if (hasMore) messages.RemoveAt(messages.Count - 1);
+
+
+        if (pageSize <= 0) pageSize = DefaultPageSize;
 
         // Đảo lại thành cũ -> mới cho frontend
         messages.Reverse();

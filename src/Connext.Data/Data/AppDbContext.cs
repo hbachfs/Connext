@@ -14,6 +14,23 @@ public class AppDbContext : DbContext
     public DbSet<Conversation> Conversations { get; set; }
     public DbSet<ConversationMember> ConversationMembers { get; set; }
     public DbSet<Message> Messages { get; set; }
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<ChatMessage>(e =>
+        {
+            e.ToTable("ChatMessages");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.SenderId).IsRequired().HasMaxLength(450);
+            e.Property(x => x.ReceiverId).IsRequired().HasMaxLength(450);
+            e.Property(x => x.Content).IsRequired().HasMaxLength(2000);
+            e.HasIndex(x => new { x.SenderId, x.ReceiverId, x.SentAt });
+            e.HasIndex(x => new { x.ReceiverId, x.IsSeen });
+        });
+    }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

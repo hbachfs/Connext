@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 @Connext.Api_HostAddress = http://localhost:5244
+=======
+@Connext.Api_HostAddress = http://localhost:5232
+>>>>>>> origin/develop
 
 GET {{Connext.Api_HostAddress}}/weatherforecast/
 Accept: application/json

@@ -4,6 +4,10 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Security.Claims;
+using Connext.Shared.Chat;
+using Connext.Data.Entities;
+using Connext.Data;
+
 
 namespace Connext.Api.Hubs;
 
@@ -206,7 +210,7 @@ public class ChatHub : Hub
         }
 
         // ---- Lưu DB ----
-        var delivered = members.Any(m => m.UserId != userId && IsOnline(m.UserId));
+        //var delivered = members.Any(m => m.UserId != userId && IsOnline(m.UserId));
         var message = new Message
         {
             ConversationId = conversationId,
@@ -216,7 +220,8 @@ public class ChatHub : Hub
             FileUrl = fileUrl,
             FileName = fileName,
             FileSize = fileSize,
-            Status = delivered ? "Delivered" : "Sent"
+            Status = delivered ? "Delivered" : "Sent",
+            Status = "Sent"
         };
         _context.Messages.Add(message);
 
@@ -231,8 +236,8 @@ public class ChatHub : Hub
             await Clients.Group(UserGroup(m.UserId)).SendAsync("ReceiveMessage", ToDto(message, m.UserId == userId));
 
         // Người nhận đang online => báo cho người gửi là đã tới nơi
-        if (delivered)
-            await Clients.Group(UserGroup(userId)).SendAsync("MessageDelivered", conversationId, message.Id);
+        //if (delivered)
+        //    await Clients.Group(UserGroup(userId)).SendAsync("MessageDelivered", conversationId, message.Id);
     }
 
     // ------------------------------------------------------------ 2. Đã xem
@@ -296,6 +301,12 @@ public class ChatHub : Hub
             await Clients.Groups(groups).SendAsync("UserTyping", conversationId, userId, isTyping);
     }
 
+    public async Task SendMessage(string message)
+    {
+        var user = Context.User?.Identity?.Name ?? "unknown";
+        await Clients.All.SendAsync("ReceiveMessage", user, message);
+    }
+
     // ------------------------------------------------------------ helpers
     private static bool TryParseType(string? raw, out MessageType result)
     {
@@ -336,5 +347,30 @@ public class ChatHub : Hub
         var root = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
         var info = new FileInfo(Path.Combine(root, "uploads", name));
         return info.Exists ? info.Length : null;
+    }
+
+    // Client gọi hàm này sau khi nhận ReceiveMessage (với tin không phải của mình)
+    public async Task AckDelivered(Guid conversationId, long messageId)
+    {
+        var userId = GetCurrentUserId();
+
+        var isMember = await _context.ConversationMembers
+            .AnyAsync(cm => cm.ConversationId == conversationId && cm.UserId == userId);
+        if (!isMember) return;
+
+        var query = _context.Messages.Where(m =>
+            m.ConversationId == conversationId &&
+            m.SenderId != userId &&
+            m.Status == "Sent" &&
+            m.Id <= messageId);
+
+        var senderIds = await query.Select(m => m.SenderId).Distinct().ToListAsync();
+        if (senderIds.Count == 0) return;
+
+        await query.ExecuteUpdateAsync(s => s.SetProperty(m => m.Status, "Delivered"));
+
+        foreach (var senderId in senderIds)
+            await Clients.Group(UserGroup(senderId))
+                .SendAsync("MessagesDelivered", conversationId, userId);
     }
 }
