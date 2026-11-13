@@ -1,0 +1,6 @@
+name: Connext - QA2 Example
+values:
+  - key: baseUrl
+    value: 'http://localhost:5232'
+  - key: token
+    value: ''
