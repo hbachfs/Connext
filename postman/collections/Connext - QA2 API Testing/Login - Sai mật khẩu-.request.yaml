@@ -1,0 +1,50 @@
+$kind: http-request
+name: Login - Sai mật khẩu.
+url: "{{baseUrl}}/api/Auth/login"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"phoneNumber\": \"0912345678\",\r
+
+    \  \"password\": \"SaiMatKhau123\"\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_AUTH_04 - Dang nhap sai mat khau\", function () {\r
+
+      \    pm.response.to.have.status(401);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Thong bao loi chinh xac\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.message).to.eql(\r
+
+      \        \"Số điện thoại hoặc mật khẩu không chính xác.\"\r
+
+      \    );\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Khong cap JWT khi sai mat khau\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data).to.not.have.property(\"token\");\r
+
+      });"
+    language: text/javascript
+order: 4000

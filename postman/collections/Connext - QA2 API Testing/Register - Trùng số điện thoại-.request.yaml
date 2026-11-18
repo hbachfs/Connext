@@ -1,0 +1,54 @@
+$kind: http-request
+name: Register - Trùng số điện thoại.
+url: "{{baseUrl}}/api/Auth/register"
+method: POST
+body:
+  type: json
+  content: "\r
+
+    {\r
+
+    \  \"phoneNumber\": \"0912345678\",\r
+
+    \  \"password\": \"Test123456\",\r
+
+    \  \"displayName\": \"QA2 Test User\"\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_AUTH_02 - Dang ky trung so dien thoai\", function () {\r
+
+      \    pm.response.to.have.status(400);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Thong bao so dien thoai da ton tai\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.message).to.eql(\r
+
+      \        \"Số điện thoại đã được đăng ký.\"\r
+
+      \    );\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Khong cap JWT cho dang ky trung\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data).to.not.have.property(\"token\");\r
+
+      });"
+    language: text/javascript
+order: 1000

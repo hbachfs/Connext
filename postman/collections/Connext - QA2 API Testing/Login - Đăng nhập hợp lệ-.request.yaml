@@ -1,0 +1,68 @@
+$kind: http-request
+name: Login - Đăng nhập hợp lệ.
+url: "{{baseUrl}}/api/Auth/login"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"phoneNumber\": \"0912345678\",\r
+
+    \  \"password\": \"Test123456\"\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_AUTH_03 - Dang nhap hop le\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Response co JWT Token\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.token).to.be.a(\"string\");\r
+
+      \    pm.expect(data.token.length).to.be.greaterThan(0);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Response co thong tin nguoi dung\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data).to.have.property(\"userId\");\r
+
+      \    pm.expect(data.phoneNumber).to.eql(\"0912345678\");\r
+
+      });\r
+
+      \r
+
+      if (pm.response.code === 200) {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    if (data.token) {\r
+
+      \        pm.environment.set(\"token\", data.token);\r
+
+      \        console.log(\"Da luu JWT token thanh cong\");\r
+
+      \    }\r
+
+      }"
+    language: text/javascript
+order: 5000

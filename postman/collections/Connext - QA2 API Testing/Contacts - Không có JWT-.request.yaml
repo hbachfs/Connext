@@ -1,0 +1,29 @@
+$kind: http-request
+name: Contacts - Không có JWT.
+url: "{{baseUrl}}/api/Contacts/friends"
+method: GET
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_SEC_01 - Tu choi truy cap khong co JWT\", function () {\r
+
+      \    pm.response.to.have.status(401);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Khong tra ve danh sach ban be\", function () {\r
+
+      \    const body = pm.response.text();\r
+
+      \r
+
+      \    pm.expect(body).to.not.include('\"phoneNumber\"');\r
+
+      \    pm.expect(body).to.not.include('\"displayName\"');\r
+
+      });"
+    language: text/javascript
+order: 6000
