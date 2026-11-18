@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using Connext.Data;            
+using Connext.Data.Entities;   
+using Connext.Shared.Chat;
 
 namespace Connext.Api.Controllers;
 

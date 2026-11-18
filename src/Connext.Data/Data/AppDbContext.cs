@@ -15,12 +15,14 @@ public class AppDbContext : DbContext
     public DbSet<ConversationMember> ConversationMembers { get; set; }
     public DbSet<Message> Messages { get; set; }
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<UserBlock> UserBlocks { get; set; }
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder builder)
     {
-        base.OnModelCreating(modelBuilder);
+        base.OnModelCreating(builder);
 
-        modelBuilder.Entity<ChatMessage>(e =>
+        // ChatMessage
+        builder.Entity<ChatMessage>(e =>
         {
             e.ToTable("ChatMessages");
             e.HasKey(x => x.Id);
@@ -30,11 +32,6 @@ public class AppDbContext : DbContext
             e.HasIndex(x => new { x.SenderId, x.ReceiverId, x.SentAt });
             e.HasIndex(x => new { x.ReceiverId, x.IsSeen });
         });
-    }
-
-    protected override void OnModelCreating(ModelBuilder builder)
-    {
-        base.OnModelCreating(builder);
 
         // User Constraints
         builder.Entity<User>().HasIndex(u => u.Phone).IsUnique();
@@ -87,5 +84,12 @@ public class AppDbContext : DbContext
 
         builder.Entity<Message>()
             .HasIndex(m => new { m.ConversationId, m.Id }); // Tối ưu cho Cursor Pagination
+
+        // UserBlock
+        builder.Entity<UserBlock>().HasKey(b => new { b.BlockerId, b.BlockedUserId });
+        builder.Entity<UserBlock>().HasOne(b => b.Blocker).WithMany()
+            .HasForeignKey(b => b.BlockerId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<UserBlock>().HasOne(b => b.BlockedUser).WithMany()
+            .HasForeignKey(b => b.BlockedUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }

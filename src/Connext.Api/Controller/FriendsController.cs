@@ -33,7 +33,7 @@ public class FriendsController : ControllerBase
 
         // Lấy id bạn bè bằng subquery rồi truy vấn User (tránh chiếu entity qua toán tử điều kiện, EF khó dịch sang SQL)
         var friendIds = _context.Friendships
-            .Where(f => f.Status == "Accepted" && (f.RequesterId == userId || f.AddresseeId == userId))
+            .Where(f => f.Status == FriendshipStatus.Accepted && (f.RequesterId == userId || f.AddresseeId == userId))
             .Select(f => f.RequesterId == userId ? f.AddresseeId : f.RequesterId);
 
         var query = _context.Users.AsNoTracking().Where(u => friendIds.Contains(u.Id));
@@ -44,7 +44,7 @@ public class FriendsController : ControllerBase
         // Đếm tổng số để hiển thị badge trên frontend (trước khi lọc online)
         var total = await query.CountAsync();
         var totalOnline = await query.CountAsync(u => u.IsOnline);
-        var totalRequests = await _context.Friendships.CountAsync(f => f.AddresseeId == userId && f.Status == "Pending");
+        var totalRequests = await _context.Friendships.CountAsync(f => f.AddresseeId == userId && f.Status == FriendshipStatus.Pending);
 
         if (filter.Equals("online", StringComparison.OrdinalIgnoreCase))
             query = query.Where(u => u.IsOnline);
@@ -72,7 +72,7 @@ public class FriendsController : ControllerBase
         var userId = GetCurrentUserId();
 
         var requests = await _context.Friendships.AsNoTracking()
-            .Where(f => f.AddresseeId == userId && f.Status == "Pending")
+            .Where(f => f.AddresseeId == userId && f.Status == FriendshipStatus.Pending)
             .Select(f => new FriendRequestDto
             {
                 Id = f.Requester.Id,
@@ -101,7 +101,7 @@ public class FriendsController : ControllerBase
 
         if (existing != null)
         {
-            if (existing.Status == "Accepted") return BadRequest(ApiResponse<object>.Fail("Hai người đã là bạn bè."));
+            if (existing.Status == FriendshipStatus.Accepted) return BadRequest(ApiResponse<object>.Fail("Hai người đã là bạn bè."));
             return BadRequest(ApiResponse<object>.Fail("Đã có lời mời kết bạn đang chờ xử lý."));
         }
 
@@ -109,7 +109,7 @@ public class FriendsController : ControllerBase
         {
             RequesterId = userId,
             AddresseeId = targetUser.Id,
-            Status = "Pending"
+            Status = FriendshipStatus.Pending
         });
         await _context.SaveChangesAsync();
 
@@ -124,26 +124,40 @@ public class FriendsController : ControllerBase
     {
         var userId = GetCurrentUserId();
 
-        // 1 câu lệnh nguyên tử: chỉ chuyển Pending -> Accepted một lần
-        var updated = await _context.Friendships
-            .Where(f => f.RequesterId == friendId && f.AddresseeId == userId && f.Status == "Pending")
-            .ExecuteUpdateAsync(s => s.SetProperty(f => f.Status, "Accepted"));
-        if (updated == 0) return NotFound(ApiResponse<object>.Fail("Không tìm thấy lời mời kết bạn."));
+        var request = await _context.Friendships.FirstOrDefaultAsync(f =>
+            f.RequesterId == friendId &&
+            f.AddresseeId == userId &&
+            f.Status == FriendshipStatus.Pending);
 
-        // Tìm/tạo hội thoại 1-1 (mỗi cặp chỉ 1 hội thoại, hiện lại nếu từng ẩn)
-        var conversationId = await DirectConversations.GetOrCreateAsync(_context, userId, friendId);
+        if (request == null)
+        {
+            return NotFound(
+                ApiResponse<object>.Fail("Không tìm thấy lời mời kết bạn."));
+        }
 
-        // Người gửi lời mời biết ngay là đã được chấp nhận
-        await _hub.Clients.Group(ChatHub.UserGroup(friendId)).SendAsync("FriendRequestAccepted", userId, conversationId);
+        request.Status = FriendshipStatus.Accepted;
+        await _context.SaveChangesAsync();
 
-        return Ok(ApiResponse<object>.Ok(new { conversationId }, "Đã chấp nhận lời mời."));
+        var conversationId = await DirectConversations.GetOrCreateAsync(
+            _context,
+            userId,
+            friendId);
+
+        await _hub.Clients
+            .Group(ChatHub.UserGroup(friendId))
+            .SendAsync("FriendRequestAccepted", userId, conversationId);
+
+        return Ok(
+            ApiResponse<object>.Ok(
+                new { conversationId },
+                "Đã chấp nhận lời mời."));
     }
 
     [HttpPost("{friendId}/decline")]
     public async Task<IActionResult> DeclineRequest(Guid friendId)
     {
         var userId = GetCurrentUserId();
-        var request = await _context.Friendships.FirstOrDefaultAsync(f => f.RequesterId == friendId && f.AddresseeId == userId && f.Status == "Pending");
+        var request = await _context.Friendships.FirstOrDefaultAsync(f => f.RequesterId == friendId && f.AddresseeId == userId && f.Status == FriendshipStatus.Pending);
 
         if (request != null)
         {
@@ -171,3 +185,4 @@ public class FriendsController : ControllerBase
         return Ok(ApiResponse<object>.Ok(null, "Đã hủy kết bạn."));
     }
 }
+

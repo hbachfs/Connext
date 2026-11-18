@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-
+using Connext.Data.Entities;
 namespace Connext.Api.Controllers;
 
 [Authorize]
@@ -19,9 +19,15 @@ public class ConversationsController : ControllerBase
     private readonly AppDbContext _context;
     private readonly IHubContext<ChatHub>? _hub;
 
-    public ConversationsController(AppDbContext context, IHubContext<ChatHub>? hub = null)
+    public ConversationsController(
+      AppDbContext context,
+      IDirectConversationService directService,
+      IDirectConversationNotifier notifier,
+      IHubContext<ChatHub>? hub = null)
     {
         _context = context;
+        this.directService = directService;
+        this.notifier = notifier;
         _hub = hub;
     }
 
@@ -102,19 +108,19 @@ public class ConversationsController : ControllerBase
     };
 
     // Mở (hoặc tạo) hội thoại 1-1 với một người bạn
-    [HttpPost("direct/{friendId:guid}")]
-    public async Task<IActionResult> OpenDirect(Guid friendId)
-    {
-        var userId = GetCurrentUserId();
-        if (friendId == userId) return BadRequest(ApiResponse<object>.Fail("Không thể nhắn tin cho chính mình."));
+    //[HttpPost("direct/{friendId:guid}")]
+    //public async Task<IActionResult> OpenDirect(Guid friendId)
+    //{
+    //    var userId = GetCurrentUserId();
+    //    if (friendId == userId) return BadRequest(ApiResponse<object>.Fail("Không thể nhắn tin cho chính mình."));
 
-        var areFriends = await _context.Friendships.AsNoTracking().AnyAsync(f => f.Status == "Accepted" &&
-            ((f.RequesterId == userId && f.AddresseeId == friendId) || (f.RequesterId == friendId && f.AddresseeId == userId)));
-        if (!areFriends) return BadRequest(ApiResponse<object>.Fail("Hai bạn chưa là bạn bè."));
+    //    var areFriends = await _context.Friendships.AsNoTracking().AnyAsync(f => f.Status == "Accepted" &&
+    //        ((f.RequesterId == userId && f.AddresseeId == friendId) || (f.RequesterId == friendId && f.AddresseeId == userId)));
+    //    if (!areFriends) return BadRequest(ApiResponse<object>.Fail("Hai bạn chưa là bạn bè."));
 
-        var conversationId = await DirectConversations.GetOrCreateAsync(_context, userId, friendId);
-        return Ok(ApiResponse<object>.Ok(new { conversationId }));
-    }
+    //    var conversationId = await DirectConversations.GetOrCreateAsync(_context, userId, friendId);
+    //    return Ok(ApiResponse<object>.Ok(new { conversationId }));
+    //}
 
     [HttpPut("{id:guid}/pin")]
     public async Task<IActionResult> Pin(Guid id, PinConversationRequest req)
@@ -187,10 +193,10 @@ public class ConversationsController : ControllerBase
             return BadRequest(ApiResponse<object>.Fail("Một hoặc nhiều thành viên không tồn tại."));
 
         var friendIds = await _context.Friendships
-            .Where(f => f.Status == "Accepted" &&
-                (f.RequesterId == userId || f.AddresseeId == userId))
-            .Select(f => f.RequesterId == userId ? f.AddresseeId : f.RequesterId)
-            .ToListAsync();
+           .Where(f => f.Status == FriendshipStatus.Accepted &&
+               (f.RequesterId == userId || f.AddresseeId == userId))
+           .Select(f => f.RequesterId == userId ? f.AddresseeId : f.RequesterId)
+           .ToListAsync();
 
         var nonFriends = memberIds
             .Where(id => id != userId && !friendIds.Contains(id))
@@ -341,6 +347,33 @@ public class ConversationsController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { name }, "Đã đổi tên nhóm."));
     }
 
+    [HttpPost("direct/{friendId:guid}")]
+    [Authorize]
+    public async Task<IActionResult> GetOrCreateDirect(Guid friendId, CancellationToken ct)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var result = await directService.GetOrCreateForFriendAsync(userId, friendId, ct);
+
+        switch (result.Error)
+        {
+            case DirectError.UserNotFound:
+                return NotFound(new { message = "Người dùng không tồn tại" });
+            case DirectError.NotFriends:
+                return StatusCode(403, new { message = "Hai bạn chưa là bạn bè" });
+            case DirectError.Blocked:
+                return StatusCode(403, new { message = "Không thể nhắn tin với người dùng này" });
+        }
+
+        var conv = result.Conversation!;
+        if (result.Created) await notifier.NotifyCreatedAsync(conv, ct);
+
+        var dto = new { conv.Id, conv.IsGroup, MemberIds = conv.Members.Select(m => m.UserId) };
+        return result.Created ? Created($"/api/conversations/{conv.Id}", dto) : Ok(dto);
+    }
+    private readonly IDirectConversationService directService;
+    private readonly IDirectConversationNotifier notifier; 
+
     // ---------------------------------------------------------------- helpers cho nhóm
     private async Task<IActionResult> RemoveMemberCore(Guid id, Guid targetId)
     {
@@ -390,7 +423,7 @@ public class ConversationsController : ControllerBase
 
     private Task<List<Guid>> GetFriendIdsAsync(Guid userId) =>
         _context.Friendships.AsNoTracking()
-            .Where(f => f.Status == "Accepted" && (f.RequesterId == userId || f.AddresseeId == userId))
+            .Where(f => f.Status == FriendshipStatus.Accepted && (f.RequesterId == userId || f.AddresseeId == userId))
             .Select(f => f.RequesterId == userId ? f.AddresseeId : f.RequesterId)
             .ToListAsync();
 

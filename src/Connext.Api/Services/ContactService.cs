@@ -31,11 +31,11 @@ public class ContactService : IContactService
         query = query.Trim();
 
         var users = await _context.Users
-            .Where(u => u.Id != currentUserId &&
-                        (u.PhoneNumber == query || u.DisplayName.Contains(query)))
-            .OrderBy(u => u.DisplayName)
-            .Take(20)
-            .ToListAsync();
+    .Where(u => u.Id != currentUserId &&
+                (u.Phone == query || u.FullName.Contains(query)))
+    .OrderBy(u => u.FullName)
+    .Take(20)
+    .ToListAsync();
 
         var friendshipIds = await _context.Friendships
             .Where(f => (f.RequesterId == currentUserId || f.AddresseeId == currentUserId)
@@ -46,8 +46,8 @@ public class ContactService : IContactService
         return users.Select(u => new UserSearchResponseDto
         {
             Id = u.Id,
-            DisplayName = u.DisplayName,
-            PhoneNumber = u.PhoneNumber,
+            DisplayName = u.FullName,
+            PhoneNumber = u.Phone,
             AvatarUrl = u.AvatarUrl,
             IsFriend = friendshipIds.Contains(u.Id)
         }).ToList();
@@ -60,7 +60,7 @@ public class ContactService : IContactService
 
         phoneNumber = phoneNumber.Trim();
 
-        var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+        var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.Phone == phoneNumber);
         if (targetUser == null || targetUser.Id == requesterId)
             return false;
 
@@ -115,10 +115,10 @@ public class ContactService : IContactService
             {
                 Id = f.Id,
                 UserId = otherUser.Id,
-                DisplayName = otherUser.DisplayName,
+                DisplayName = otherUser.FullName,
                 AvatarUrl = otherUser.AvatarUrl,
                 IsOnline = otherUser.IsOnline,
-                LastSeen = otherUser.LastSeen
+                LastSeen = otherUser.LastSeenAt
             };
         }).ToList();
     }

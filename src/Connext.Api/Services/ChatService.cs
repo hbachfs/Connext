@@ -65,7 +65,7 @@ public class ChatService : IChatService
         foreach (var m in unseen)
         {
             m.IsSeen = true;
-            m.SeenAt = now;
+            
         }
 
         await _db.SaveChangesAsync(ct);

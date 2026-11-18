@@ -48,7 +48,7 @@ public class ChatHub : Hub
 
     private Task<List<Guid>> GetFriendIdsAsync(Guid userId) =>
         _context.Friendships.AsNoTracking()
-            .Where(f => f.Status == "Accepted" && (f.RequesterId == userId || f.AddresseeId == userId))
+            .Where(f => f.Status == FriendshipStatus.Accepted && (f.RequesterId == userId || f.AddresseeId == userId))
             .Select(f => f.RequesterId == userId ? f.AddresseeId : f.RequesterId)
             .ToListAsync();
 
@@ -204,13 +204,13 @@ public class ChatHub : Hub
         {
             var otherId = members.FirstOrDefault(m => m.UserId != userId)?.UserId
                           ?? throw new HubException("Hội thoại không hợp lệ.");
-            var areFriends = await _context.Friendships.AsNoTracking().AnyAsync(f => f.Status == "Accepted" &&
-                ((f.RequesterId == userId && f.AddresseeId == otherId) || (f.RequesterId == otherId && f.AddresseeId == userId)));
+            var areFriends = await _context.Friendships.AsNoTracking().AnyAsync(f => f.Status == FriendshipStatus.Accepted &&
+     ((f.RequesterId == userId && f.AddresseeId == otherId) || (f.RequesterId == otherId && f.AddresseeId == userId)));
             if (!areFriends) throw new HubException("Hai bạn không còn là bạn bè nên không thể nhắn tin.");
         }
 
         // ---- Lưu DB ----
-        //var delivered = members.Any(m => m.UserId != userId && IsOnline(m.UserId));
+        var delivered = members.Any(m => m.UserId != userId && IsOnline(m.UserId));
         var message = new Message
         {
             ConversationId = conversationId,
@@ -220,13 +220,14 @@ public class ChatHub : Hub
             FileUrl = fileUrl,
             FileName = fileName,
             FileSize = fileSize,
-            Status = delivered ? "Delivered" : "Sent",
-            Status = "Sent"
+            Status = delivered ? "Delivered" : "Sent"
         };
         _context.Messages.Add(message);
-
         // Có tin mới thì hội thoại hiện lại trong danh sách của mọi người.
         // KHÔNG đụng tới ClearedAt: lịch sử đã xóa không được hiện lại.
+
+        if (delivered)
+            await Clients.Group(UserGroup(userId)).SendAsync("MessageDelivered", conversationId, message.Id);
         foreach (var m in members) m.IsHidden = false;
 
         await _context.SaveChangesAsync();
@@ -236,8 +237,6 @@ public class ChatHub : Hub
             await Clients.Group(UserGroup(m.UserId)).SendAsync("ReceiveMessage", ToDto(message, m.UserId == userId));
 
         // Người nhận đang online => báo cho người gửi là đã tới nơi
-        //if (delivered)
-        //    await Clients.Group(UserGroup(userId)).SendAsync("MessageDelivered", conversationId, message.Id);
     }
 
     // ------------------------------------------------------------ 2. Đã xem

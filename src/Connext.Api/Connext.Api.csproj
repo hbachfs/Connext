@@ -1,49 +1,27 @@
-<<<<<<< HEAD
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
-=======
 <Project Sdk="Microsoft.NET.Sdk.Web">
->>>>>>> origin/develop
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-<<<<<<< HEAD
-    <UserSecretsId>connext-api-6d1f7e2a-3b9c-4c52-9a41-5e0f8d27b3c1</UserSecretsId>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UserSecretsId>Connext.Api-8e51a6c4-7f3b-4c87-9432-23df12ec6153</UserSecretsId>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Connext.Shared\Connext.Shared.csproj" />
-    <ProjectReference Include="..\Connext.Data\Connext.Data.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+			<PrivateAssets>all</PrivateAssets>
+		</PackageReference>
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
+		<PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
-=======
-    <UserSecretsId>Connext.Api-8e51a6c4-7f3b-4c87-9432-23df12ec6153</UserSecretsId>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
->>>>>>> origin/develop
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
-<<<<<<< HEAD
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
-=======
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Connext.Data\Connext.Data.csproj" />
-    <ProjectReference Include="..\Connext.Shared\Connext.Shared.csproj" />
->>>>>>> origin/develop
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Connext.Data\Connext.Data.csproj" />
+		<ProjectReference Include="..\Connext.Shared\Connext.Shared.csproj" />
+	</ItemGroup>
 
 </Project>

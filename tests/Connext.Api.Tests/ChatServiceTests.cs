@@ -30,8 +30,8 @@ var id = Guid.NewGuid();
         return u;
     }
 
-    private static void Befriend(AppDbContext db, User a, User b, string st = FriendshipStatus.Accepted) =>
-        db.Friendships.Add(new Friendship { RequesterId = a.Id, AddresseeId = b.Id, Status = st });
+    private static void Befriend(AppDbContext db, User a, User b, FriendshipStatus st = FriendshipStatus.Accepted) =>
+       db.Friendships.Add(new Friendship { RequesterId = a.Id, AddresseeId = b.Id, Status = st });
 
     private static async Task<(AppDbContext db, ChatService svc, User a, User b)> SetupFriendsAsync()
     {
