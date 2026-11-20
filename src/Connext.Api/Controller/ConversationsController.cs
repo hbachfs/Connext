@@ -18,6 +18,8 @@ public class ConversationsController : ControllerBase
 
     private readonly AppDbContext _context;
     private readonly IHubContext<ChatHub>? _hub;
+    private readonly IDirectConversationService directService;
+    private readonly IDirectConversationNotifier notifier;
 
     public ConversationsController(
       AppDbContext context,
@@ -104,23 +106,8 @@ public class ConversationsController : ControllerBase
     {
         "image" => "[Hình ảnh]",
         "file" => "[Tệp đính kèm]",
-        _=> content
+        _ => content
     };
-
-    // Mở (hoặc tạo) hội thoại 1-1 với một người bạn
-    //[HttpPost("direct/{friendId:guid}")]
-    //public async Task<IActionResult> OpenDirect(Guid friendId)
-    //{
-    //    var userId = GetCurrentUserId();
-    //    if (friendId == userId) return BadRequest(ApiResponse<object>.Fail("Không thể nhắn tin cho chính mình."));
-
-    //    var areFriends = await _context.Friendships.AsNoTracking().AnyAsync(f => f.Status == "Accepted" &&
-    //        ((f.RequesterId == userId && f.AddresseeId == friendId) || (f.RequesterId == friendId && f.AddresseeId == userId)));
-    //    if (!areFriends) return BadRequest(ApiResponse<object>.Fail("Hai bạn chưa là bạn bè."));
-
-    //    var conversationId = await DirectConversations.GetOrCreateAsync(_context, userId, friendId);
-    //    return Ok(ApiResponse<object>.Ok(new { conversationId }));
-    //}
 
     [HttpPut("{id:guid}/pin")]
     public async Task<IActionResult> Pin(Guid id, PinConversationRequest req)
@@ -237,6 +224,7 @@ public class ConversationsController : ControllerBase
             },
             "Tạo nhóm thành công."));
     }
+
     // Danh sách thành viên (mọi thành viên đều xem được)
     [HttpGet("groups/{id:guid}/members")]
     public async Task<IActionResult> GetMembers(Guid id)
@@ -262,7 +250,7 @@ public class ConversationsController : ControllerBase
         return Ok(ApiResponse<object>.Ok(members));
     }
 
-    // Thêm thành viên (chỉ quản trị viên, chỉ thêm bạn bè của mình)
+    // Thêm thành viên (chỉ quản trị viên, chỉ thêm bạn bè của mình, chưa bị chặn)
     [HttpPost("groups/{id:guid}/members")]
     public async Task<IActionResult> AddMembers(Guid id, [FromBody] AddMembersRequest request)
     {
@@ -289,6 +277,13 @@ public class ConversationsController : ControllerBase
         if (newIds.Any(x => !friendIds.Contains(x)))
             return BadRequest(ApiResponse<object>.Fail("Bạn chỉ có thể thêm những người đã là bạn bè."));
 
+        // THÊM: issue yêu cầu "chỉ thêm bạn bè chưa bị chặn" -> kiểm tra chặn 2 chiều
+        var hasBlocked = await _context.UserBlocks.AsNoTracking().AnyAsync(b =>
+            (b.BlockerId == userId && newIds.Contains(b.BlockedUserId)) ||
+            (b.BlockedUserId == userId && newIds.Contains(b.BlockerId)));
+        if (hasBlocked)
+            return BadRequest(ApiResponse<object>.Fail("Không thể thêm người dùng đã chặn hoặc đã chặn bạn."));
+
         // Người mới không thấy tin cũ: đặt mốc cắt lịch sử và coi như đã đọc đến tin hiện tại
         var now = DateTime.UtcNow;
         var lastMsgId = await _context.Messages
@@ -301,6 +296,7 @@ public class ConversationsController : ControllerBase
             {
                 UserId = newId,
                 Role = "Member",
+                JoinedAt = now, // THÊM: gán JoinedAt để chuyển quyền admin theo "người vào sớm nhất" luôn đúng
                 ClearedAt = now,
                 LastReadMessageId = lastMsgId
             });
@@ -347,11 +343,67 @@ public class ConversationsController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { name }, "Đã đổi tên nhóm."));
     }
 
+    // THÊM: đặt avatar nhóm (chỉ quản trị viên). Chỉ nhận file đã upload qua /api/files/upload
+    [HttpPut("groups/{id:guid}/avatar")]
+    public async Task<IActionResult> UpdateAvatar(Guid id, [FromBody] UpdateGroupAvatarRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var url = request.AvatarUrl?.Trim();
+        if (string.IsNullOrEmpty(url) || url.Length > 300 || url.Contains("..")
+            || !url.StartsWith("/uploads/", StringComparison.Ordinal))
+            return BadRequest(ApiResponse<object>.Fail("Ảnh đại diện không hợp lệ."));
+
+        var group = await LoadGroupAsync(id);
+        var me = group?.Members.FirstOrDefault(m => m.UserId == userId);
+        if (group == null || me == null)
+            return NotFound(ApiResponse<object>.Fail("Không tìm thấy nhóm."));
+        if (me.Role != "Admin")
+            return StatusCode(StatusCodes.Status403Forbidden,
+                ApiResponse<object>.Fail("Chỉ quản trị viên nhóm mới được đổi ảnh nhóm."));
+
+        group.AvatarUrl = url;
+        await _context.SaveChangesAsync();
+
+        await NotifyAsync(group.Members.Select(m => m.UserId), "ConversationUpdated", id);
+        return Ok(ApiResponse<object>.Ok(new { avatarUrl = url }, "Đã đổi ảnh nhóm."));
+    }
+
+    // THÊM: phân quyền (chỉ quản trị viên): thăng Member -> Admin hoặc giáng Admin -> Member
+    [HttpPut("groups/{id:guid}/members/{memberId:guid}/role")]
+    public async Task<IActionResult> SetRole(Guid id, Guid memberId, [FromBody] SetMemberRoleRequest request)
+    {
+        var userId = GetCurrentUserId();
+        if (request.Role != "Admin" && request.Role != "Member")
+            return BadRequest(ApiResponse<object>.Fail("Vai trò không hợp lệ."));
+
+        var group = await LoadGroupAsync(id);
+        var me = group?.Members.FirstOrDefault(m => m.UserId == userId);
+        if (group == null || me == null)
+            return NotFound(ApiResponse<object>.Fail("Không tìm thấy nhóm."));
+        if (me.Role != "Admin")
+            return StatusCode(StatusCodes.Status403Forbidden,
+                ApiResponse<object>.Fail("Chỉ quản trị viên nhóm mới được phân quyền."));
+
+        var target = group.Members.FirstOrDefault(m => m.UserId == memberId);
+        if (target == null)
+            return NotFound(ApiResponse<object>.Fail("Người này không ở trong nhóm."));
+
+        // Không giáng admin cuối cùng (nhóm phải luôn còn ít nhất 1 quản trị viên)
+        if (target.Role == "Admin" && request.Role == "Member" && group.Members.Count(m => m.Role == "Admin") == 1)
+            return BadRequest(ApiResponse<object>.Fail("Nhóm phải còn ít nhất 1 quản trị viên."));
+
+        target.Role = request.Role;
+        await _context.SaveChangesAsync();
+
+        await NotifyAsync(group.Members.Select(m => m.UserId), "ConversationUpdated", id);
+        return Ok(ApiResponse<object>.Ok(new { memberId, role = request.Role }, "Đã cập nhật quyền."));
+    }
+
     [HttpPost("direct/{friendId:guid}")]
-    [Authorize]
+    // SỬA: bỏ [Authorize] lặp vì class đã có [Authorize]
     public async Task<IActionResult> GetOrCreateDirect(Guid friendId, CancellationToken ct)
     {
-        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var userId = GetCurrentUserId(); // SỬA: dùng helper có sẵn thay cho Guid.Parse(...)
 
         var result = await directService.GetOrCreateForFriendAsync(userId, friendId, ct);
 
@@ -371,8 +423,7 @@ public class ConversationsController : ControllerBase
         var dto = new { conv.Id, conv.IsGroup, MemberIds = conv.Members.Select(m => m.UserId) };
         return result.Created ? Created($"/api/conversations/{conv.Id}", dto) : Ok(dto);
     }
-    private readonly IDirectConversationService directService;
-    private readonly IDirectConversationNotifier notifier; 
+    // SỬA: 2 field directService/notifier đã chuyển lên đầu class cùng các field khác
 
     // ---------------------------------------------------------------- helpers cho nhóm
     private async Task<IActionResult> RemoveMemberCore(Guid id, Guid targetId)
@@ -448,3 +499,7 @@ public class ConversationsController : ControllerBase
         return $"Hoạt động {(int)ago.TotalDays} ngày trước";
     }
 }
+// THÊM: request mới cho 2 endpoint avatar và phân quyền
+// (nếu dự án để các request trong thư mục Shared thì chuyển 2 dòng này sang đó cho đồng bộ)
+public record UpdateGroupAvatarRequest(string? AvatarUrl);
+public record SetMemberRoleRequest(string Role);

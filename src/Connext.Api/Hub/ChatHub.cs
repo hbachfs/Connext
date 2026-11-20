@@ -1,13 +1,11 @@
-﻿using Connext.Shared.Chat;
+﻿using Connext.Data;                 // THÊM: AppDbContext
+using Connext.Data.Entities;        // THÊM: Message, MessageMention, FriendshipStatus
+using Connext.Shared.Chat;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Security.Claims;
-using Connext.Shared.Chat;
-using Connext.Data.Entities;
-using Connext.Data;
-
 
 namespace Connext.Api.Hubs;
 
@@ -21,11 +19,11 @@ public class ChatHub : Hub
     private const int MaxContentLength = 4000;
     private const int MaxFileNameLength = 255;
     private const int TypingThrottleMs = 1500;
+    private const int MaxMentions = 50; // THÊM: giới hạn số người được @mention mỗi tin
     private const string TypingKey = "typing-last-sent";
 
     private enum MessageType { Text, Image, File }
 
-    // Theo dõi các kết nối của mỗi User (1 User có thể mở nhiều tab/trình duyệt)
     // Lưu ý: chỉ đúng khi chạy 1 instance. Nhiều instance cần Redis backplane + lưu presence ngoài bộ nhớ.
     private static readonly ConcurrentDictionary<Guid, HashSet<string>> _userConnections = new();
     private static readonly object _presenceLock = new();
@@ -48,7 +46,7 @@ public class ChatHub : Hub
 
     private Task<List<Guid>> GetFriendIdsAsync(Guid userId) =>
         _context.Friendships.AsNoTracking()
-            .Where(f => f.Status == FriendshipStatus.Accepted && (f.RequesterId == userId || f.AddresseeId == userId))
+            .Where(f => f.Status == FriendshipStatus.Accepted && (f.RequesterId == userId || f.AddresseeId == userId)) // SỬA: enum thay cho "Accepted"
             .Select(f => f.RequesterId == userId ? f.AddresseeId : f.RequesterId)
             .ToListAsync();
 
@@ -167,7 +165,8 @@ public class ChatHub : Hub
     }
 
     // ------------------------------------------------------------ 1. Gửi tin
-    public async Task SendMessage(Guid conversationId, string type, string? content, string? fileUrl, string? fileName)
+    // SỬA: thêm tham số mentionedUserIds (client truyền null nếu không nhắc ai)
+    public async Task SendMessage(Guid conversationId, string type, string? content, string? fileUrl, string? fileName, List<Guid>? mentionedUserIds = null)
     {
         var userId = GetCurrentUserId();
 
@@ -204,13 +203,24 @@ public class ChatHub : Hub
         {
             var otherId = members.FirstOrDefault(m => m.UserId != userId)?.UserId
                           ?? throw new HubException("Hội thoại không hợp lệ.");
+            // SỬA: enum FriendshipStatus thay cho "Accepted"
             var areFriends = await _context.Friendships.AsNoTracking().AnyAsync(f => f.Status == FriendshipStatus.Accepted &&
-     ((f.RequesterId == userId && f.AddresseeId == otherId) || (f.RequesterId == otherId && f.AddresseeId == userId)));
+                ((f.RequesterId == userId && f.AddresseeId == otherId) || (f.RequesterId == otherId && f.AddresseeId == userId)));
             if (!areFriends) throw new HubException("Hai bạn không còn là bạn bè nên không thể nhắn tin.");
         }
 
+        // THÊM: @mention, chỉ nhận thành viên của nhóm, bỏ chính mình, bỏ trùng, tối đa MaxMentions
+        List<Guid> mentions = [];
+        if (isGroup && mentionedUserIds is { Count: > 0 })
+        {
+            var memberIdSet = members.Select(m => m.UserId).ToHashSet();
+            mentions = mentionedUserIds.Distinct()
+                .Where(id => id != userId && memberIdSet.Contains(id))
+                .Take(MaxMentions).ToList();
+        }
+
         // ---- Lưu DB ----
-        var delivered = members.Any(m => m.UserId != userId && IsOnline(m.UserId));
+        // SỬA: bỏ biến delivered; luôn "Sent", chuyển Delivered qua AckDelivered / MarkPendingAsDeliveredAsync
         var message = new Message
         {
             ConversationId = conversationId,
@@ -220,14 +230,13 @@ public class ChatHub : Hub
             FileUrl = fileUrl,
             FileName = fileName,
             FileSize = fileSize,
-            Status = delivered ? "Delivered" : "Sent"
+            Status = "Sent",
+            Mentions = mentions.Select(id => new MessageMention { UserId = id }).ToList() // THÊM: lưu cùng SaveChanges
         };
         _context.Messages.Add(message);
+
         // Có tin mới thì hội thoại hiện lại trong danh sách của mọi người.
         // KHÔNG đụng tới ClearedAt: lịch sử đã xóa không được hiện lại.
-
-        if (delivered)
-            await Clients.Group(UserGroup(userId)).SendAsync("MessageDelivered", conversationId, message.Id);
         foreach (var m in members) m.IsHidden = false;
 
         await _context.SaveChangesAsync();
@@ -236,7 +245,10 @@ public class ChatHub : Hub
         foreach (var m in members)
             await Clients.Group(UserGroup(m.UserId)).SendAsync("ReceiveMessage", ToDto(message, m.UserId == userId));
 
-        // Người nhận đang online => báo cho người gửi là đã tới nơi
+        // THÊM: sự kiện riêng cho người được @mention
+        foreach (var uid in mentions)
+            await Clients.Group(UserGroup(uid)).SendAsync("UserMentioned",
+                new { ConversationId = conversationId, MessageId = message.Id, SenderId = userId });
     }
 
     // ------------------------------------------------------------ 2. Đã xem
@@ -267,13 +279,37 @@ public class ChatHub : Hub
             .SendAsync("MessagesSeen", conversationId, userId, lastMsgId.Value);
     }
 
+    // THÊM: client gọi sau khi nhận ReceiveMessage (với tin không phải của mình) để báo "đã nhận"
+    public async Task AckDelivered(Guid conversationId, long messageId)
+    {
+        var userId = GetCurrentUserId();
+
+        var isMember = await _context.ConversationMembers
+            .AnyAsync(cm => cm.ConversationId == conversationId && cm.UserId == userId);
+        if (!isMember) return;
+
+        var query = _context.Messages.Where(m =>
+            m.ConversationId == conversationId &&
+            m.SenderId != userId &&
+            m.Status == "Sent" &&
+            m.Id <= messageId);
+
+        var senderIds = await query.Select(m => m.SenderId).Distinct().ToListAsync();
+        if (senderIds.Count == 0) return;
+
+        await query.ExecuteUpdateAsync(s => s.SetProperty(m => m.Status, "Delivered"));
+
+        foreach (var senderId in senderIds)
+            await Clients.Group(UserGroup(senderId))
+                .SendAsync("MessagesDelivered", conversationId, userId);
+    }
+
     // ------------------------------------------------------------ 3. Đang nhập...
     public async Task Typing(Guid conversationId, bool isTyping)
     {
         var userId = GetCurrentUserId();
 
         // Throttle theo từng kết nối: Context.Items tự được dọn khi kết nối đóng.
-        // SignalR xử lý tuần tự các lời gọi của 1 kết nối nên không cần lock.
         if (!Context.Items.TryGetValue(TypingKey, out var obj) || obj is not Dictionary<Guid, long> lastSent)
         {
             lastSent = new Dictionary<Guid, long>();
@@ -300,12 +336,6 @@ public class ChatHub : Hub
             await Clients.Groups(groups).SendAsync("UserTyping", conversationId, userId, isTyping);
     }
 
-    public async Task SendMessage(string message)
-    {
-        var user = Context.User?.Identity?.Name ?? "unknown";
-        await Clients.All.SendAsync("ReceiveMessage", user, message);
-    }
-
     // ------------------------------------------------------------ helpers
     private static bool TryParseType(string? raw, out MessageType result)
     {
@@ -330,7 +360,8 @@ public class ChatHub : Hub
         FileName = m.FileName,
         FileSize = m.FileSize,
         CreatedAt = m.CreatedAt,
-        Status = m.Status
+        Status = m.Status,
+        MentionedUserIds = m.Mentions.Select(x => x.UserId).ToList() // THÊM
     };
 
     // Chỉ nhận file đã upload qua /api/files/upload ("/uploads/<tên>"), trả về kích thước; null nếu không hợp lệ.
@@ -346,30 +377,5 @@ public class ChatHub : Hub
         var root = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
         var info = new FileInfo(Path.Combine(root, "uploads", name));
         return info.Exists ? info.Length : null;
-    }
-
-    // Client gọi hàm này sau khi nhận ReceiveMessage (với tin không phải của mình)
-    public async Task AckDelivered(Guid conversationId, long messageId)
-    {
-        var userId = GetCurrentUserId();
-
-        var isMember = await _context.ConversationMembers
-            .AnyAsync(cm => cm.ConversationId == conversationId && cm.UserId == userId);
-        if (!isMember) return;
-
-        var query = _context.Messages.Where(m =>
-            m.ConversationId == conversationId &&
-            m.SenderId != userId &&
-            m.Status == "Sent" &&
-            m.Id <= messageId);
-
-        var senderIds = await query.Select(m => m.SenderId).Distinct().ToListAsync();
-        if (senderIds.Count == 0) return;
-
-        await query.ExecuteUpdateAsync(s => s.SetProperty(m => m.Status, "Delivered"));
-
-        foreach (var senderId in senderIds)
-            await Clients.Group(UserGroup(senderId))
-                .SendAsync("MessagesDelivered", conversationId, userId);
     }
 }

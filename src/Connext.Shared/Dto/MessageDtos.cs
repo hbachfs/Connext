@@ -13,6 +13,8 @@ public class MessageDto
     public long? FileSize { get; set; }
     public DateTime CreatedAt { get; set; }
     public required string Status { get; set; } // "Sent", "Delivered", "Seen"
+
+    public List<Guid> MentionedUserIds { get; set; } = new List<Guid>();
 }
 
 public record PagedMessagesResponse(

@@ -21,4 +21,6 @@ public class Message
 
     public Conversation Conversation { get; set; } = null!;
     public User Sender { get; set; } = null!;
+
+    public virtual ICollection<MessageMention> Mentions { get; set; } = new List<MessageMention>();
 }

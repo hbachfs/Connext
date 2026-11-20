@@ -17,6 +17,8 @@ public class AppDbContext : DbContext
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<UserBlock> UserBlocks { get; set; }
 
+    public DbSet<MessageMention> MessageMentions { get; set; }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -91,5 +93,22 @@ public class AppDbContext : DbContext
             .HasForeignKey(b => b.BlockerId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<UserBlock>().HasOne(b => b.BlockedUser).WithMany()
             .HasForeignKey(b => b.BlockedUserId).OnDelete(DeleteBehavior.Restrict);
+
+
+        // trong OnModelCreating(ModelBuilder builder)
+        builder.Entity<MessageMention>().HasKey(x => new { x.MessageId, x.UserId });
+
+        builder.Entity<MessageMention>()
+            .HasOne(x => x.Message).WithMany(m => m.Mentions)
+            .HasForeignKey(x => x.MessageId).OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<MessageMention>()
+            .HasOne(x => x.User).WithMany()
+            .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<MessageMention>().HasIndex(x => x.UserId);
+
+        builder.Entity<ConversationMember>().Property(x => x.Role).HasMaxLength(20).HasDefaultValue("Member");
+        builder.Entity<Conversation>().Property(x => x.Name).HasMaxLength(100);
     }
 }

@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using Connext.Data;            
 using Connext.Data.Entities;   
-using Connext.Shared.Chat;
 
 namespace Connext.Api.Controllers;
 
@@ -59,7 +58,7 @@ public class MessagesController : ControllerBase
         if (hasMore) messages.RemoveAt(messages.Count - 1);
 
 
-        if (pageSize <= 0) pageSize = DefaultPageSize;
+        //if (pageSize <= 0) pageSize = DefaultPageSize;
 
         // Đảo lại thành cũ -> mới cho frontend
         messages.Reverse();

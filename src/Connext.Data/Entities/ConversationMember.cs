@@ -20,5 +20,10 @@ public class ConversationMember
 
     public Conversation Conversation { get; set; } = null!;
     public User User { get; set; } = null!;
+
+    // Conversation.cs: thêm nếu PR #34 chưa có
+    public string? Name { get; set; }
+    public string? AvatarUrl { get; set; }
+    public Guid? CreatedById { get; set; }
 }
 
