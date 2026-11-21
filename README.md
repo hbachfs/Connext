@@ -94,10 +94,10 @@ dotnet user-secrets set "Smtp:Password" "your-smtp-password" --project src/Conne
 
 | Tầng | Công nghệ |
 |---|---|
-| Frontend | Blazor WebAssembly, MudBlazor |
-| Backend | ASP.NET Core Web API (.NET 8/9), Clean Architecture |
-| Thời gian thực | ASP.NET Core SignalR |
-| Gọi thoại/video | WebRTC + SignalR Signaling |
+| Frontend | ASP.NET Core MVC / Razor Pages, HTML/CSS/JavaScript, Bootstrap |
+| Backend | ASP.NET Core Web API (.NET 10), Clean Architecture |
+| Thời gian thực | ASP.NET Core SignalR (Hub phía server, JavaScript Client phía trình duyệt) |
+| Gọi thoại/video | WebRTC (API JavaScript của trình duyệt) + SignalR Signaling |
 | Cơ sở dữ liệu | SQL Server + Entity Framework Core (Code-First) |
 | Cache | Redis |
 | Lưu file | Cloudinary hoặc MinIO |
@@ -127,7 +127,7 @@ Connext/
 ├── src/
 │   ├── Connext.Shared/    # DTO, Enum, Validation dùng chung
 │   ├── Connext.Api/       # ASP.NET Core Web API + SignalR Hubs
-│   ├── Connext.Client/    # Blazor WebAssembly
+│   ├── Connext.Web/       # ASP.NET Core MVC/Razor giao diện, wwwroot (JS, CSS)
 │   └── Connext.Data/      # EF Core, Migrations
 ├── tests/             # Unit test, Postman Collection, Test Case
 ├── docker-compose.yml
@@ -207,7 +207,7 @@ Workflow `.github/workflows/ci.yml` chạy trên mọi PR vào `develop` và `ma
 ## Tài liệu
 
 - Đặc tả SRS: thư mục [`docs/`](docs/)
-- Thiết kế Figma: _(dán link)_
+- Thiết kế Figma: [Connext trên Figma](https://www.figma.com/design/j4eyVglgmtoZCfuh5eVrgx/Wed-chat?node-id=0-1&t=oh8jXfJQcKk50pXs-1) (dev dùng Dev Mode để xem kích thước, màu, font và export assets)
 - Bảng công việc: _(dán link GitHub Projects)_
 - Tài liệu API (Swagger): _(cập nhật khi có server)_
 
@@ -215,17 +215,17 @@ Workflow `.github/workflows/ci.yml` chạy trên mọi PR vào `develop` và `ma
 
 | Vai trò | Họ tên | Nhánh phụ trách |
 |---|---|---|
-| Project Manager | _(tên)_ | `docs/pm-management` |
-| Business Analyst | _(tên)_ | `docs/ba-srs` |
-| UX Designer | _(tên)_ | `design/ux-wireframe` |
-| UI Designer | _(tên)_ | `design/ui-design-system` |
-| Backend 1 | _(tên)_ | `feature/be1-core-realtime` |
-| Backend 2 | _(tên)_ | `feature/be2-auth-contacts-groups-storage` |
-| Frontend 1 | _(tên)_ | `feature/fe1-chat-webrtc` |
-| Frontend 2 | _(tên)_ | `feature/fe2-auth-contacts-groups-media` |
-| DevOps | _(tên)_ | `devops/infra-cicd` |
-| QA/QC 1 | _(tên)_ | `qa/qa1-business-ui-testing` |
-| QA/QC 2 | _(tên)_ | `qa/qa2-api-realtime-perf` |
+| Project Manager | _(Bách)_ | `docs/pm-management` |
+| Business Analyst | _(Dương)_ | `docs/ba-srs` |
+| UX Designer | _(Thuận)_ | `design/ux-wireframe` |
+| UI Designer | _(Thái)_ | `design/ui-design-system` |
+| Backend 1 | _(Thông)_ | `feature/be1-core-realtime` |
+| Backend 2 | _(Thái)_ | `feature/be2-auth-contacts-groups-storage` |
+| Frontend 1 | _(Trung)_ | `feature/fe1-chat-webrtc` |
+| Frontend 2 | _(Linh)_ | `feature/fe2-auth-contacts-groups-media` |
+| DevOps | _(Bảo)_ | `devops/infra-cicd` |
+| QA/QC 1 | _(Tùng)_ | `qa/qa1-business-ui-testing` |
+| QA/QC 2 | _(Chiến)_ | `qa/qa2-api-realtime-perf` |
 
 ## Đóng góp
 
