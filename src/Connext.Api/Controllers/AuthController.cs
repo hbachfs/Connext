@@ -3,6 +3,7 @@ using Connext.Shared.DTOs.Auth;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Connext.Api.Controllers;
 
@@ -43,6 +44,7 @@ public class AuthController : ControllerBase
     /// Đăng nhập bằng số điện thoại và mật khẩu.
     /// </summary>
     [HttpPost("login")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
         if (!ModelState.IsValid)

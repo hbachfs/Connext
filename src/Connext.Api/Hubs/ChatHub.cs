@@ -104,6 +104,9 @@ public class ChatHub : Hub
             var message = await _conversationService.SendMessageAsync(userId, request);
             await Clients.Group(ConversationRoom(request.ConversationId))
                 .SendAsync("ReceiveMessage", message);
+            foreach (var mentionedUserId in message.MentionedUserIds)
+                await Clients.Group(UserRoom(mentionedUserId))
+                    .SendAsync("MessageMentioned", message);
         }
         catch (InvalidOperationException exception)
         {
@@ -134,6 +137,75 @@ public class ChatHub : Hub
             throw new HubException(exception.Message);
         }
     }
+
+        public async Task RecallMessage(Guid conversationId, Guid messageId)
+        {
+            try
+            {
+                await _conversationService.RecallMessageAsync(GetUserId(), conversationId, messageId);
+                await Clients.Group(ConversationRoom(conversationId)).SendAsync("MessageRecalled", messageId);
+            }
+            catch (InvalidOperationException exception) { throw new HubException(exception.Message); }
+        }
+
+        public async Task AddReaction(Guid conversationId, Guid messageId, string emoji)
+        {
+            try
+            {
+                var userId = GetUserId();
+                await _conversationService.AddReactionAsync(userId, conversationId, messageId, emoji);
+                await Clients.Group(ConversationRoom(conversationId)).SendAsync("ReactionAdded", messageId, userId, emoji);
+            }
+            catch (InvalidOperationException exception) { throw new HubException(exception.Message); }
+        }
+
+        public async Task RemoveReaction(Guid conversationId, Guid messageId, string emoji)
+        {
+            try
+            {
+                var userId = GetUserId();
+                await _conversationService.RemoveReactionAsync(userId, conversationId, messageId, emoji);
+                await Clients.Group(ConversationRoom(conversationId)).SendAsync("ReactionRemoved", messageId, userId, emoji);
+            }
+            catch (InvalidOperationException exception) { throw new HubException(exception.Message); }
+        }
+
+        public async Task InviteCall(Guid conversationId, Guid recipientId)
+        {
+            var userId = GetUserId();
+            if (!await _conversationService.IsMemberAsync(userId, conversationId) ||
+                !await _conversationService.IsMemberAsync(recipientId, conversationId))
+                throw new HubException("Người dùng không thuộc cuộc hội thoại.");
+            await Clients.Group(UserRoom(recipientId)).SendAsync("CallIncoming", conversationId, userId);
+        }
+
+        public async Task AnswerCall(Guid conversationId, Guid callerId, bool accepted)
+        {
+            var userId = GetUserId();
+            await Clients.Group(UserRoom(callerId))
+                .SendAsync("CallAnswered", conversationId, userId, accepted);
+        }
+
+        public async Task SendIceCandidate(Guid conversationId, Guid recipientId, object candidate)
+        {
+            var userId = GetUserId();
+            await Clients.Group(UserRoom(recipientId))
+                .SendAsync("IceCandidate", conversationId, userId, candidate);
+        }
+
+        public async Task SendSignal(Guid conversationId, Guid recipientId, string type, object payload)
+        {
+            var userId = GetUserId();
+            await Clients.Group(UserRoom(recipientId))
+                .SendAsync(type, conversationId, userId, payload);
+        }
+
+        public async Task EndCall(Guid conversationId, Guid recipientId)
+        {
+            var userId = GetUserId();
+            await Clients.Group(UserRoom(recipientId))
+                .SendAsync("CallEnded", conversationId, userId);
+        }
 
     private async Task<List<Guid>> GetUnblockedFriendIdsAsync(Guid userId) =>
         await _context.Friendships
