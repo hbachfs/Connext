@@ -8,4 +8,5 @@ public class ConversationMember
     public User User { get; set; } = null!;
     public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastReadAt { get; set; }
+    public ConversationMemberRole Role { get; set; } = ConversationMemberRole.Member;
 }
