@@ -25,3 +25,7 @@ Thumbs.db
 
 # Node (nếu dùng cho frontend tooling)
 node_modules/
+
+*.bak
+*.tar.gz
+*.pem

@@ -103,6 +103,12 @@ dotnet user-secrets set "Smtp:Password" "your-smtp-password" --project src/Conne
 | Lưu file | Cloudinary hoặc MinIO |
 | Hạ tầng | Docker Compose, GitHub Actions, Nginx |
 
+### 🗄️ Cấu hình Lưu trữ MinIO
+
+Trong file cấu hình môi trường production (`docker-compose.prod.yml`), chúng ta sử dụng image `coollabsio/minio` thay vì image chính thức với các lý do kỹ thuật sau:
+- **Tính tương thích và ổn định:** Được tinh chỉnh tối ưu cho các môi trường VPS tự quản lý (self-hosted), giúp container khởi động mượt mà, tránh các lỗi liên quan đến entrypoint hoặc healthcheck.
+- **Đồng bộ hệ thống:** Hoạt động ổn định hơn khi kết hợp cùng Nginx reverse proxy và dịch vụ backend ASP.NET Core trong việc xử lý tệp tin tải lên dung lượng lớn.
+
 ## Cấu trúc nhánh
 
 | Nhánh | Mục đích |
@@ -190,9 +196,27 @@ cp .env.example .env
 
 # 2. Khởi động hệ thống
 docker compose up -d --build
+```
+### Quay lại tag trước khi deploy lỗi (Rollback)
 
-### CI
+Nếu bản deploy mới gặp sự cố trên VPS, có thể đưa môi trường về tag ổn định trước đó (ví dụ `v0.9-rc1`) như sau:
 
+1. **Qua GitHub Actions (khuyến nghị):** Đẩy lại tag ổn định trước đó lên `origin` (hoặc cập nhật tag trỏ về commit ổn định rồi push tag `v*`) để kích hoạt workflow deploy:
+  ```bash
+  git checkout <commit_hoac_tag_on_dinh_truoc>
+  git tag -f v0.9-rc1
+  git push origin -f v0.9-rc1
+  ```
+   
+2. Trực tiếp trên VPS (khi cần xử lý khẩn cấp): Vào thư mục dự án, checkout đúng tag ổn định và dựng lại container mà không dùng down -v để giữ nguyên dữ liệu:
+
+```Bash
+cd "$HOME/Connext"
+git fetch --all --tags --force
+git checkout --force <tag_on_dinh>
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
 Workflow `.github/workflows/ci.yml` chạy trên mọi PR vào `develop` và `main`: build, test .NET 8 và kiểm tra `docker-compose.yml`. PR cần CI xanh trước khi merge.
 
 ## Lộ trình 4 tuần
