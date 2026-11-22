@@ -1,0 +1,55 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/verify-otp"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"email\": \"{{testEmail}}\",\r
+
+    \  \"code\": \"{{otp}}\"\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_RESET_02 - Status 200 OK\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_RESET_02 - Tra ve reset token\", function () {\r
+
+      \    var data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data).to.have.property(\"token\");\r
+
+      \    pm.expect(data.token).to.be.a(\"string\");\r
+
+      \    pm.expect(data.token.length).to.be.greaterThan(0);\r
+
+      });\r
+
+      \r
+
+      if (pm.response.code === 200) {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    if (data.token) {\r
+
+      \        pm.environment.set(\"resetToken\", data.token);\r
+
+      \    }\r
+
+      }\r\n"
+    language: text/javascript
+order: 16000

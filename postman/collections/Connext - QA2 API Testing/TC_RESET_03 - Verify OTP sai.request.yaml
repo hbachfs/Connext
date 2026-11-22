@@ -1,0 +1,39 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/verify-otp"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"email\": \"{{testEmail}}\",\r
+
+    \  \"code\": \"000000\"\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_RESET_03 - Status 400 Bad Request\", function () {\r
+
+      \    pm.response.to.have.status(400);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_RESET_03 - Thong bao OTP khong hop le\", function () {\r
+
+      \    var data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.message).to.eql(\r
+
+      \        \"Mã xác minh không hợp lệ hoặc đã hết hạn.\"\r
+
+      \    );\r
+
+      });\r\n"
+    language: text/javascript
+order: 15000
