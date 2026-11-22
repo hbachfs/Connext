@@ -1,0 +1,28 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Contacts/friends/{{contactBUserId}}"
+method: DELETE
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONTACT_11 - Status 404 Not Found\", function () {\r
+
+      \    pm.response.to.have.status(404);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONTACT_11 - Khong tim thay quan he ban be\", function () {\r
+
+      \    const response = pm.response.text();\r
+
+      \r
+
+      \    pm.expect(response).to.include(\"Không tìm thấy quan hệ bạn bè.\");\r
+
+      });"
+    language: text/javascript
+order: 29000

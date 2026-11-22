@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Contacts/friends/{{contactBUserId}}"
+method: DELETE
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONTACT_09 - Status 204 No Content\", function () {\r
+
+      \    pm.response.to.have.status(204);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONTACT_09 - Response Body rong\", function () {\r
+
+      \    pm.expect(pm.response.text()).to.eql(\"\");\r
+
+      });"
+    language: text/javascript
+order: 27000

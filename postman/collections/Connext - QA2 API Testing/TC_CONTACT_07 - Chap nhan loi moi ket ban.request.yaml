@@ -1,0 +1,33 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Contacts/respond"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"requestId\": \"{{contactRequestId}}\",\r
+
+    \  \"accept\": true\r
+
+    }"
+auth:
+  type: bearer
+  credentials:
+    token: "{{contactBToken}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONTACT_07 - Status 200 OK\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONTACT_07 - Chap nhan loi moi thanh cong\", function () {\r
+
+      \    pm.expect(pm.response.code).to.eql(200);\r
+
+      });"
+    language: text/javascript
+order: 26000
