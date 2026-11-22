@@ -22,5 +22,16 @@ public class Message
     public Conversation Conversation { get; set; } = null!;
     public User Sender { get; set; } = null!;
 
+    
+    public long? ReplyToMessageId { get; set; }
+    public virtual Message? ReplyToMessage { get; set; }
+
+   
+    public bool IsRecalled { get; set; }
+    public DateTime? RecalledAt { get; set; }
+
+   
+    public virtual ICollection<MessageReaction> Reactions { get; set; } = new List<MessageReaction>();
+
     public virtual ICollection<MessageMention> Mentions { get; set; } = new List<MessageMention>();
 }

@@ -1,11 +1,12 @@
-﻿using Connext.Data;                 // THÊM: AppDbContext
-using Connext.Data.Entities;        // THÊM: Message, MessageMention, FriendshipStatus
+﻿using Connext.Data;                 
+using Connext.Data.Entities;       
 using Connext.Shared.Chat;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Security.Claims;
+using Connext.Api.Services;
 
 namespace Connext.Api.Hubs;
 
@@ -24,6 +25,7 @@ public class ChatHub : Hub
 
     private enum MessageType { Text, Image, File }
 
+    
     // Lưu ý: chỉ đúng khi chạy 1 instance. Nhiều instance cần Redis backplane + lưu presence ngoài bộ nhớ.
     private static readonly ConcurrentDictionary<Guid, HashSet<string>> _userConnections = new();
     private static readonly object _presenceLock = new();
@@ -31,12 +33,17 @@ public class ChatHub : Hub
     private readonly AppDbContext _context;
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<ChatHub> _logger;
+    private readonly CallManager _calls;
 
-    public ChatHub(AppDbContext context, IWebHostEnvironment env, ILogger<ChatHub> logger)
+
+    public static bool IsUserOnline(Guid userId) => _userConnections.ContainsKey(userId);  
+
+    public ChatHub(AppDbContext context, IWebHostEnvironment env, ILogger<ChatHub> logger, CallManager calls)
     {
         _context = context;
         _env = env;
         _logger = logger;
+        _calls = calls;
     }
 
     public static string UserGroup(Guid userId) => $"user-{userId}";
@@ -138,6 +145,12 @@ public class ChatHub : Hub
             {
                 _logger.LogError(ex, "Lỗi cập nhật presence khi user {UserId} ngắt kết nối", userId);
             }
+
+            if (lastConnection && !IsOnline(userId))   
+            {
+                try { await _calls.HandleUserOfflineAsync(userId); }
+                catch (Exception ex) { _logger.LogError(ex, "Lỗi kết thúc cuộc gọi khi user {UserId} ngắt kết nối", userId); }
+            }
         }
 
         await base.OnDisconnectedAsync(exception);
@@ -166,7 +179,8 @@ public class ChatHub : Hub
 
     // ------------------------------------------------------------ 1. Gửi tin
     // SỬA: thêm tham số mentionedUserIds (client truyền null nếu không nhắc ai)
-    public async Task SendMessage(Guid conversationId, string type, string? content, string? fileUrl, string? fileName, List<Guid>? mentionedUserIds = null)
+    public async Task SendMessage(Guid conversationId, string type, string? content, string? fileUrl, string? fileName,
+    List<Guid>? mentionedUserIds = null, long? replyToMessageId = null)
     {
         var userId = GetCurrentUserId();
 
@@ -209,7 +223,7 @@ public class ChatHub : Hub
             if (!areFriends) throw new HubException("Hai bạn không còn là bạn bè nên không thể nhắn tin.");
         }
 
-        // THÊM: @mention, chỉ nhận thành viên của nhóm, bỏ chính mình, bỏ trùng, tối đa MaxMentions
+        // @mention, chỉ nhận thành viên của nhóm, bỏ chính mình, bỏ trùng, tối đa MaxMentions
         List<Guid> mentions = [];
         if (isGroup && mentionedUserIds is { Count: > 0 })
         {
@@ -217,6 +231,15 @@ public class ChatHub : Hub
             mentions = mentionedUserIds.Distinct()
                 .Where(id => id != userId && memberIdSet.Contains(id))
                 .Take(MaxMentions).ToList();
+        }
+        // trả lời tin nhắn, tin gốc phải cùng hội thoại và chưa bị thu hồi
+        Message? replyTo = null;
+        if (replyToMessageId is not null)
+        {
+            replyTo = await _context.Messages.FirstOrDefaultAsync(m =>
+                m.Id == replyToMessageId && m.ConversationId == conversationId);
+            if (replyTo is null) throw new HubException("Tin nhắn được trả lời không tồn tại.");
+            if (replyTo.IsRecalled) throw new HubException("Không thể trả lời tin nhắn đã thu hồi.");
         }
 
         // ---- Lưu DB ----
@@ -231,6 +254,8 @@ public class ChatHub : Hub
             FileName = fileName,
             FileSize = fileSize,
             Status = "Sent",
+            ReplyToMessageId = replyTo?.Id,
+            ReplyToMessage = replyTo,
             Mentions = mentions.Select(id => new MessageMention { UserId = id }).ToList() // THÊM: lưu cùng SaveChanges
         };
         _context.Messages.Add(message);
@@ -243,7 +268,7 @@ public class ChatHub : Hub
 
         // ---- Phát realtime tới từng thành viên (kể cả các tab khác của người gửi) ----
         foreach (var m in members)
-            await Clients.Group(UserGroup(m.UserId)).SendAsync("ReceiveMessage", ToDto(message, m.UserId == userId));
+            await Clients.Group(UserGroup(m.UserId)).SendAsync("ReceiveMessage", MessageMapper.ToDto(message, m.UserId == userId));
 
         // THÊM: sự kiện riêng cho người được @mention
         foreach (var uid in mentions)
@@ -335,6 +360,35 @@ public class ChatHub : Hub
         if (groups.Count > 0)
             await Clients.Groups(groups).SendAsync("UserTyping", conversationId, userId, isTyping);
     }
+
+    // ------------------------------------------------------------ 4. Gọi điện
+    private static void ThrowIfFailed(CallResult r)
+    {
+        if (!r.Ok) throw new HubException(CallMessages.For(r.Error));
+    }
+
+    // Trả về callId cho người gọi
+    public async Task<Guid> StartCall(Guid friendId, bool video)
+    {
+        var r = await _calls.StartAsync(GetCurrentUserId(), friendId, video);
+        ThrowIfFailed(r);
+        return r.CallId;
+    }
+
+    public async Task AcceptCall(Guid callId) => ThrowIfFailed(await _calls.AcceptAsync(GetCurrentUserId(), callId));
+    public async Task RejectCall(Guid callId) => ThrowIfFailed(await _calls.RejectAsync(GetCurrentUserId(), callId));
+    public async Task EndCall(Guid callId) => ThrowIfFailed(await _calls.EndAsync(GetCurrentUserId(), callId));
+
+    public async Task SendOffer(Guid callId, string sdp) =>
+        ThrowIfFailed(await _calls.RelayAsync(GetCurrentUserId(), callId, "offer", sdp));
+
+    public async Task SendAnswer(Guid callId, string sdp) =>
+        ThrowIfFailed(await _calls.RelayAsync(GetCurrentUserId(), callId, "answer", sdp));
+
+    // candidate: JSON.stringify(event.candidate)
+    public async Task SendIceCandidate(Guid callId, string candidate) =>
+        ThrowIfFailed(await _calls.RelayAsync(GetCurrentUserId(), callId, "ice", candidate));
+
 
     // ------------------------------------------------------------ helpers
     private static bool TryParseType(string? raw, out MessageType result)

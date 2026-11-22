@@ -19,7 +19,7 @@ public class GroupServiceTests
     private static async Task<(Guid convId, List<Guid> users)> SeedGroupAsync(AppDbContext db, int count)
     {
         var users = Enumerable.Range(0, count).Select(_ => Guid.NewGuid()).ToList();
-        db.Users.AddRange(users.Select(id => new User { Id = id })); // CHỈNH: trường bắt buộc của User
+        db.Users.AddRange(users.Select(TestData.NewUser)); // CHỈNH: trường bắt buộc của User
         var conv = new Conversation { Id = Guid.NewGuid(), IsGroup = true, Name = "G" };
         for (var i = 0; i < count; i++)
             conv.Members.Add(new ConversationMember
@@ -36,8 +36,8 @@ public class GroupServiceTests
     private static async Task<Guid> NewFriendOfAsync(AppDbContext db, Guid owner)
     {
         var f = Guid.NewGuid();
-        db.Users.Add(new User { Id = f });
-        db.Friendships.Add(new Friendship { RequesterId = owner, AddresseeId = f, Status = "Accepted" });
+        db.Users.Add(TestData.NewUser(f));
+        db.Friendships.Add(new Friendship { RequesterId = owner, AddresseeId = f, Status = FriendshipStatus.Accepted });
         await db.SaveChangesAsync();
         return f;
     }
@@ -61,7 +61,7 @@ public class GroupServiceTests
         var (db, svc) = Setup();
         var (cid, u) = await SeedGroupAsync(db, 3);
         var stranger = Guid.NewGuid();
-        db.Users.Add(new User { Id = stranger });
+        db.Users.Add(TestData.NewUser(stranger));
         await db.SaveChangesAsync();
 
         var r = await svc.AddMembersAsync(u[0], cid, [stranger]);
@@ -170,9 +170,9 @@ public class GroupServiceTests
         var (db, svc) = Setup();
         var (cid, u) = await SeedGroupAsync(db, 3);
 
-        Assert.True((await svc.UpdateInfoAsync(u[1], cid, "Tên mới", null)).Ok);
+        Assert.True((await svc.UpdateInfoAsync(u[0], cid, "Tên mới", null)).Ok);          // SỬA: u[0] là Admin
         Assert.Equal("Tên mới", (await db.Conversations.FindAsync(cid))!.Name);
-        Assert.Equal(GroupError.Invalid, (await svc.UpdateInfoAsync(u[1], cid, "   ", null)).Error);
+        Assert.Equal(GroupError.Invalid, (await svc.UpdateInfoAsync(u[0], cid, "   ", null)).Error); // SỬA
     }
 
     [Fact]
@@ -181,7 +181,15 @@ public class GroupServiceTests
         var (db, svc) = Setup();
         var (cid, u) = await SeedGroupAsync(db, 3);
 
-        Assert.Equal(GroupError.Invalid, (await svc.UpdateInfoAsync(u[1], cid, null, "http://evil.com/a.png")).Error);
-        Assert.True((await svc.UpdateInfoAsync(u[1], cid, null, "/uploads/a.png")).Ok);
+        Assert.Equal(GroupError.Invalid, (await svc.UpdateInfoAsync(u[0], cid, null, "http://evil.com/a.png")).Error); // SỬA
+        Assert.True((await svc.UpdateInfoAsync(u[0], cid, null, "/uploads/a.png")).Ok);                                // SỬA
+    }
+    [Fact]
+    public async Task Rename_By_Member_Rejected()
+    {
+        var (db, svc) = Setup();
+        var (cid, u) = await SeedGroupAsync(db, 3);
+
+        Assert.Equal(GroupError.NotAdmin, (await svc.UpdateInfoAsync(u[1], cid, "X", null)).Error);
     }
 }

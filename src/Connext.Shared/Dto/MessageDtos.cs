@@ -15,7 +15,44 @@ public class MessageDto
     public required string Status { get; set; } // "Sent", "Delivered", "Seen"
 
     public List<Guid> MentionedUserIds { get; set; } = new List<Guid>();
+
+    
+    public bool IsRecalled { get; set; }
+    public long? ReplyToMessageId { get; set; }
+    public ReplyPreviewDto? ReplyTo { get; set; }   // nội dung tin gốc rút gọn
+    public List<ReactionDto> Reactions { get; set; } = new List<ReactionDto>();
 }
+
+
+public class ReplyPreviewDto
+{
+    public long Id { get; set; }
+    public Guid SenderId { get; set; }
+    public string? Preview { get; set; }
+}
+
+
+public class ReactionDto
+{
+    public string Emoji { get; set; } = "";
+    public int Count { get; set; }
+    public List<Guid> UserIds { get; set; } = new List<Guid>();
+}
+
+
+public class PinnedMessageDto
+{
+    public long MessageId { get; set; }
+    public Guid SenderId { get; set; }
+    public string Type { get; set; } = "text";
+    public string? Preview { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public Guid PinnedById { get; set; }
+    public DateTime PinnedAt { get; set; }
+}
+
+
+public record ReactionRequest(string Emoji);
 
 public record PagedMessagesResponse(
     IReadOnlyList<MessageDto> Items, long? NextBeforeId);

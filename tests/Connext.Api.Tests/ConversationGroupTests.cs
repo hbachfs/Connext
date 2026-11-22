@@ -5,7 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-
+using Connext.Api.Services;
+using Connext.Data.Entities;
 namespace Connext.Api.Tests;
 
 public sealed class ConversationGroupTests : IDisposable
@@ -87,7 +88,8 @@ public sealed class ConversationGroupTests : IDisposable
         var identity = new ClaimsIdentity(
             new[] { new Claim(ClaimTypes.NameIdentifier, _owner.ToString()) }, "test");
 
-        return new ConversationsController(db)
+        // SỬA: constructor mới cần directService + notifier; hub = null (không phát realtime trong test)
+        return new ConversationsController(db, new DirectConversationService(db), new NoopNotifier())
         {
             ControllerContext = new ControllerContext
             {
@@ -116,8 +118,15 @@ public sealed class ConversationGroupTests : IDisposable
     {
         RequesterId = requesterId,
         AddresseeId = addresseeId,
-        Status = "Accepted"
+        Status = FriendshipStatus.Accepted
     };
+    // THÊM: notifier giả, không làm gì
+    private sealed class NoopNotifier : IDirectConversationNotifier
+    {
+        public Task NotifyCreatedAsync(Connext.Data.Entities.Conversation conv, CancellationToken ct = default)
+            => Task.CompletedTask;
+    }
 
     public void Dispose() => _connection.Dispose();
+
 }

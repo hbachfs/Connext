@@ -3,8 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using Connext.Data;            
-using Connext.Data.Entities;   
+using Connext.Data;
+using Connext.Data.Entities;
+using Connext.Api.Services;
 
 namespace Connext.Api.Controllers;
 
@@ -50,6 +51,10 @@ public class MessagesController : ControllerBase
             query = query.Where(m => m.Id < beforeId.Value);
 
         var messages = await query
+            .Include(m => m.Mentions)          // lịch sử trả đủ người được @mention
+            .Include(m => m.Reactions)         // reaction
+            .Include(m => m.ReplyToMessage)    // nội dung tin gốc khi trả lời
+            .AsSplitQuery()                    // tránh nổ số dòng khi Include nhiều collection
             .OrderByDescending(m => m.Id)
             .Take(pageSize + 1) // Lấy dư 1 để check hasMore
             .ToListAsync();
@@ -57,28 +62,22 @@ public class MessagesController : ControllerBase
         var hasMore = messages.Count > pageSize;
         if (hasMore) messages.RemoveAt(messages.Count - 1);
 
-
-        //if (pageSize <= 0) pageSize = DefaultPageSize;
-
         // Đảo lại thành cũ -> mới cho frontend
         messages.Reverse();
 
-        var dtos = messages.Select(m => new MessageDto
+        // SỬA: dùng MessageMapper chung (đã xử lý thu hồi, reply, reaction, mention)
+        var dtos = messages.Select(m =>
         {
-            Id = m.Id,
-            ConversationId = m.ConversationId,
-            SenderId = m.SenderId,
-            Mine = m.SenderId == userId,
-            Type = m.Type,
-            Content = m.Content,
-            FileUrl = m.FileUrl,
-            FileName = m.FileName,
-            FileSize = m.FileSize,
-            CreatedAt = m.CreatedAt,
-            Status = m.Status
+            var dto = MessageMapper.ToDto(m, m.SenderId == userId);
+
+            // THÊM: tin gốc nằm trước mốc xóa lịch sử thì không lộ nội dung
+            if (member.ClearedAt.HasValue && dto.ReplyTo != null &&
+                m.ReplyToMessage!.CreatedAt <= member.ClearedAt.Value)
+                dto.ReplyTo.Preview = null;
+
+            return dto;
         }).ToList();
 
         return Ok(ApiResponse<object>.Ok(new { hasMore, messages = dtos }));
     }
 }
-

@@ -104,6 +104,11 @@ builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<IDirectConversationService, DirectConversationService>();
 builder.Services.AddScoped<IDirectConversationNotifier, DirectConversationNotifier>();
 builder.Services.AddScoped<IGroupService, GroupService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<MessageActionService>();
+builder.Services.Configure<CallOptions>(builder.Configuration.GetSection("Calls"));
+builder.Services.AddSingleton<ICallNotifier, HubCallNotifier>();
+builder.Services.AddSingleton<CallManager>();
 
 builder.Services.AddRateLimiter(options =>
 {

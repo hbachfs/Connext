@@ -19,6 +19,9 @@ public class AppDbContext : DbContext
 
     public DbSet<MessageMention> MessageMentions { get; set; }
 
+    public DbSet<MessageReaction> MessageReactions { get; set; }
+    public DbSet<MessagePin> MessagePins { get; set; }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -110,5 +113,30 @@ public class AppDbContext : DbContext
 
         builder.Entity<ConversationMember>().Property(x => x.Role).HasMaxLength(20).HasDefaultValue("Member");
         builder.Entity<Conversation>().Property(x => x.Name).HasMaxLength(100);
+        //
+        builder.Entity<Message>()
+    .HasOne(m => m.ReplyToMessage).WithMany()
+    .HasForeignKey(m => m.ReplyToMessageId)
+    .OnDelete(DeleteBehavior.Restrict);
+
+        // Reaction: 1 người 1 reaction cho 1 tin (thêm = insert, đổi = update, bỏ = delete)
+        builder.Entity<MessageReaction>().HasKey(r => new { r.MessageId, r.UserId });
+        builder.Entity<MessageReaction>().Property(r => r.Emoji).HasMaxLength(16);
+        builder.Entity<MessageReaction>()
+            .HasOne(r => r.Message).WithMany(m => m.Reactions)
+            .HasForeignKey(r => r.MessageId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<MessageReaction>()
+            .HasOne(r => r.User).WithMany()
+            .HasForeignKey(r => r.UserId).OnDelete(DeleteBehavior.Restrict);
+
+        // Ghim: 1 tin chỉ ghim 1 lần
+        builder.Entity<MessagePin>().HasKey(p => p.MessageId);
+        builder.Entity<MessagePin>().HasIndex(p => p.ConversationId);
+        builder.Entity<MessagePin>()
+            .HasOne(p => p.Message).WithMany()
+            .HasForeignKey(p => p.MessageId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<MessagePin>()
+            .HasOne(p => p.PinnedBy).WithMany()
+            .HasForeignKey(p => p.PinnedById).OnDelete(DeleteBehavior.Restrict);
     }
 }
