@@ -11,6 +11,9 @@ public class User
     [MaxLength(20)]
     public string PhoneNumber { get; set; } = string.Empty;
 
+    [MaxLength(254)]
+    public string? Email { get; set; }
+
     [Required]
     public string PasswordHash { get; set; } = string.Empty;
 
@@ -27,4 +30,3 @@ public class User
 
     public DateTime? LastSeen { get; set; }
 }
-

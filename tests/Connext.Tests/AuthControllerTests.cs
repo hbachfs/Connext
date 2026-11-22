@@ -24,6 +24,8 @@ public class AuthControllerTests
             if (LoginFunc != null) return LoginFunc(request);
             throw new NotImplementedException();
         }
+
+        public Task LogoutAsync(Guid userId) => Task.CompletedTask;
     }
 
     [Fact]
@@ -136,4 +138,3 @@ public class AuthControllerTests
         Assert.Equal(401, unauthorizedResult.StatusCode);
     }
 }
-

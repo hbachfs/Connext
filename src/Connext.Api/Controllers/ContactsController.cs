@@ -48,4 +48,31 @@ public class ContactsController : ControllerBase
         var result = await _contactService.RespondToRequestAsync(CurrentUserId, dto.RequestId, dto.Accept);
         return result ? Ok() : BadRequest("Thao tác không hợp lệ.");
     }
+
+    [HttpGet("requests")]
+    public async Task<IActionResult> GetRequests()
+    {
+        return Ok(await _contactService.GetRequestsAsync(CurrentUserId));
+    }
+
+    [HttpDelete("friends/{friendId:guid}")]
+    public async Task<IActionResult> RemoveFriend(Guid friendId)
+    {
+        var result = await _contactService.RemoveFriendAsync(CurrentUserId, friendId);
+        return result ? NoContent() : NotFound("Không tìm thấy quan hệ bạn bè.");
+    }
+
+    [HttpPost("blocks/{userId:guid}")]
+    public async Task<IActionResult> BlockUser(Guid userId)
+    {
+        var result = await _contactService.BlockUserAsync(CurrentUserId, userId);
+        return result ? NoContent() : BadRequest("Không thể chặn người dùng này.");
+    }
+
+    [HttpDelete("blocks/{userId:guid}")]
+    public async Task<IActionResult> UnblockUser(Guid userId)
+    {
+        var result = await _contactService.UnblockUserAsync(CurrentUserId, userId);
+        return result ? NoContent() : NotFound("Không tìm thấy lượt chặn.");
+    }
 }

@@ -1,6 +1,8 @@
 using Connext.Data;
 using Connext.Data.Entities;
+using Connext.Shared;
 using Connext.Shared.DTOs.Auth;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace Connext.Api.Services;
@@ -19,31 +21,41 @@ public class AuthService : IAuthService
     public async Task<AuthResponseDto> RegisterAsync(RegisterRequestDto request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (!PhoneNumberNormalizer.TryNormalize(request.PhoneNumber, out var phoneNumber))
+            throw new InvalidOperationException("Số điện thoại không hợp lệ.");
+        var email = NormalizeEmail(request.Email);
 
-        // Kiểm tra số điện thoại đã tồn tại chưa
         var existingUser = await _dbContext.Users
             .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber);
+            .FirstOrDefaultAsync(user => user.PhoneNumber == phoneNumber ||
+                (email != null && user.Email == email));
 
         if (existingUser is not null)
-        {
-            throw new InvalidOperationException("Số điện thoại đã được đăng ký.");
-        }
+            throw new InvalidOperationException(existingUser.PhoneNumber == phoneNumber
+                ? "Số điện thoại đã được đăng ký."
+                : "Email đã được đăng ký.");
 
-        // Tạo user mới
         var user = new User
         {
             Id = Guid.NewGuid(),
-            PhoneNumber = request.PhoneNumber,
+            PhoneNumber = phoneNumber,
+            Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             DisplayName = request.DisplayName,
             CreatedAt = DateTime.UtcNow
         };
 
         _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
+        {
+            _dbContext.Entry(user).State = EntityState.Detached;
+            throw new InvalidOperationException("Số điện thoại hoặc email đã được đăng ký.", exception);
+        }
 
-        // Tạo JWT token
         var token = _jwtTokenService.GenerateToken(user);
 
         return new AuthResponseDto
@@ -60,27 +72,22 @@ public class AuthService : IAuthService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Tìm user theo số điện thoại
+        if (!PhoneNumberNormalizer.TryNormalize(request.PhoneNumber, out var phoneNumber))
+            return null;
+
         var user = await _dbContext.Users
-            .FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber);
+            .FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
 
         if (user is null)
         {
             return null; // Không tìm thấy user
         }
 
-        // Xác minh mật khẩu
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
             return null; // Sai mật khẩu
         }
 
-        // Cập nhật trạng thái online
-        user.IsOnline = true;
-        user.LastSeen = DateTime.UtcNow;
-        await _dbContext.SaveChangesAsync();
-
-        // Tạo JWT token
         var token = _jwtTokenService.GenerateToken(user);
 
         return new AuthResponseDto
@@ -92,5 +99,21 @@ public class AuthService : IAuthService
             AvatarUrl = user.AvatarUrl
         };
     }
-}
 
+    public async Task LogoutAsync(Guid userId)
+    {
+        var user = await _dbContext.Users.FindAsync(userId);
+        if (user is null)
+            return;
+
+        user.IsOnline = false;
+        user.LastSeen = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync();
+    }
+
+    private static string? NormalizeEmail(string? email) =>
+        string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant();
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException exception) =>
+        exception.GetBaseException() is SqlException { Number: 2601 or 2627 };
+}
