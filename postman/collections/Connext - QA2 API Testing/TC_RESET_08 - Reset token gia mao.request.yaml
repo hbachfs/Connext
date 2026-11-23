@@ -1,0 +1,39 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/reset-password"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"token\": \"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmYWtlIn0.invalidsignature\",\r
+
+    \  \"newPassword\": \"{{newPassword}}\"\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_RESET_08 - Status 400 Bad Request\", function () {\r
+
+      \    pm.response.to.have.status(400);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_RESET_08 - Tu choi token gia mao\", function () {\r
+
+      \    var data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.message).to.eql(\r
+
+      \        \"Token đặt lại mật khẩu không hợp lệ hoặc đã được sử dụng.\"\r
+
+      \    );\r
+
+      });"
+    language: text/javascript
+order: 10197
