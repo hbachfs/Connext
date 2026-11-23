@@ -45,3 +45,19 @@ jobs:
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 
             docker image prune -f
+
+      - name: Smoke Test API Health Check
+        run: |
+          echo "Checking API health endpoint..."
+          TARGET_URL="https://connext-app.eastasia.cloudapp.azure.com/api/health"
+          for i in {1..12}; do
+            STATUS=$(curl -fsS -o /dev/null -w "%{http_code}" "$TARGET_URL" || true)
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "204" ]; then
+              echo "Smoke test passed! ($TARGET_URL -> HTTP $STATUS)"
+              exit 0
+            fi
+            echo "Attempt $i/12: API not ready yet (HTTP $STATUS), retrying in 5s..."
+            sleep 5
+          done
+          echo "ERROR: Smoke test failed for $TARGET_URL after 60s!"
+          exit 1
