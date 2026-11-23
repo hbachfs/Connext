@@ -68,8 +68,9 @@ Sau khi cấu hình SQL Server, áp dụng schema mới bằng:
   `PUT /api/users/me` trước khi yêu cầu đặt lại mật khẩu.
 - `POST /api/auth/forgot-password`, `POST /api/auth/verify-otp`,
   `POST /api/auth/reset-password` dùng OTP 6 số (hết hạn sau 10 phút, tối đa 5
-  lần nhập sai, gửi lại sau 60 giây). Đăng nhập, gửi OTP và xác minh OTP được
-  giới hạn 5 yêu cầu/phút theo IP. SMTP cần cấu hình `Smtp:Host`,
+  lần nhập sai, gửi lại sau 60 giây). Đăng nhập giới hạn 5 lần sai/phút theo số
+  điện thoại đã chuẩn hóa và 5 yêu cầu/phút theo IP; gửi OTP và xác minh OTP
+  cũng bị giới hạn 5 yêu cầu/phút theo IP. SMTP cần cấu hình `Smtp:Host`,
   `Smtp:Port`, `Smtp:Username`, `Smtp:Password`, `Smtp:From` và `Smtp:EnableSsl`
   qua User Secrets hoặc biến môi trường.
 - `GET/PUT /api/users/me` đọc/cập nhật hồ sơ; `PUT /api/users/me/password` đổi

@@ -58,6 +58,7 @@ builder.Services.AddScoped<IContactService, ContactService>();
 builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
+builder.Services.AddSingleton<LoginAttemptTracker>();
 builder.Services.AddScoped<IChatNotifier, ChatNotifier>();
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddSingleton<IConnectionTracker, ConnectionTracker>();
