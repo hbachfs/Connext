@@ -1,0 +1,61 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Auth/register"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"email\": null,\r
+
+    \  \"phoneNumber\": \"0912345692\",\r
+
+    \  \"password\": \"{{contactBPassword}}\",\r
+
+    \  \"displayName\": \"QA2 Contact B\"\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_AUTH_01 - Dang ky tai khoan hop le\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Response co JWT Token\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.token).to.be.a(\"string\");\r
+
+      \    pm.expect(data.token.length).to.be.greaterThan(0);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Response co thong tin tai khoan\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \    const body = JSON.parse(pm.request.body.raw);\r
+
+      \r
+
+      \    const phone = body.phoneNumber.replace(/^0/, \"+84\");\r
+
+      \r
+
+      \    pm.expect(data).to.have.property(\"userId\");\r
+
+      \    pm.expect(data.phoneNumber).to.eql(phone);\r
+
+      });"
+    language: text/javascript
+order: 2000

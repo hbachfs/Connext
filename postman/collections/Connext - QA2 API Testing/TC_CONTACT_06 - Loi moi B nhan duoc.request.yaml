@@ -1,0 +1,52 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Contacts/requests"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{contactBToken}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONTACT_06 - Status 200 OK\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONTACT_06 - Co danh sach received\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.received).to.be.an(\"array\");\r
+
+      \    pm.expect(data.sent).to.be.an(\"array\");\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONTACT_06 - B nhan duoc loi moi\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.received.length).to.be.greaterThan(0);\r
+
+      \r
+
+      \    const invitation = data.received[0];\r
+
+      \r
+
+      \    pm.expect(invitation.requestId).to.be.a(\"string\");\r
+
+      \    pm.expect(invitation.userId).to.be.a(\"string\");\r
+
+      });"
+    language: text/javascript
+order: 23000

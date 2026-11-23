@@ -1,0 +1,31 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Contacts/request"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"phoneNumber\": \"0912345692\"\r
+
+    }"
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONTACT_04 - Status 200 OK\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONTACT_04 - Gui loi moi thanh cong\", function () {\r
+
+      \    pm.expect(pm.response.code).to.eql(200);\r
+
+      });"
+    language: text/javascript
+order: 22000

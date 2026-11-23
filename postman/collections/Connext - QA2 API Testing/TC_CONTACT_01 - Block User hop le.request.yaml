@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Contacts/blocks/{{contactBUserId}}"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_CONTACT_01 - Status 204 No Content\", function () {\r
+
+      \    pm.response.to.have.status(204);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONTACT_01 - Response Body rong\", function () {\r
+
+      \    pm.expect(pm.response.text()).to.eql(\"\");\r
+
+      });\r\n"
+    language: text/javascript
+order: 21000

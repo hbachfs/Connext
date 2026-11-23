@@ -1,0 +1,42 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Contacts/friends"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONTACT_10 - Status 200 OK\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONTACT_10 - B khong con trong danh sach ban be\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \    const userIdB = pm.environment.get(\"contactBUserId\");\r
+
+      \r
+
+      \    pm.expect(data).to.be.an(\"array\");\r
+
+      \r
+
+      \    const friend = data.find(\r
+
+      \        item => item.userId.toLowerCase() === userIdB.toLowerCase()\r
+
+      \    );\r
+
+      \r
+
+      \    pm.expect(friend).to.be.undefined;\r
+
+      });"
+    language: text/javascript
+order: 28000
