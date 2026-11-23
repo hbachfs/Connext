@@ -140,6 +140,14 @@ Connext/
 └── .github/workflows/ # CI/CD
 ```
 
+## Quyết định kiến trúc backend
+
+- Backend chính thức là **`src/Connext.Api`** (ASP.NET Core Web API và SignalR), cùng `Connext.Data` và `Connext.Shared`, theo Clean Architecture.
+- Trước đây có hai backend trùng nhau (một trong `src/`, một ở thư mục gốc nhánh `feature/fe1-chat-webrtc`, mỗi bên có `AuthController`, `User`, `AppDbContext` riêng). Code chat, hồ sơ và OTP đã được chuyển vào `src/`; không còn backend nào nằm ngoài `src/`.
+- Cấu hình JWT dùng một tên duy nhất là `JwtSettings:SecretKey` (không dùng `Jwt:Key`).
+- Nhánh `feature/be*` chứa backend, nhánh `feature/fe*` chỉ chứa frontend. Không để code backend ở nhánh frontend.
+- Mọi code backend mới đưa vào `src/` bằng PR vào `develop`.
+
 ## Chạy dự án
 
 Yêu cầu: Git, Docker Desktop (hoặc Docker Engine + Compose v2), .NET SDK 8.
