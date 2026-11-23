@@ -3,6 +3,7 @@ using Connext.Api.Services;
 using Connext.Data;
 using Connext.Data.Entities;
 using Connext.Shared.DTOs.Contacts;
+using Connext.Shared.DTOs.Conversations;
 using Connext.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -48,7 +49,7 @@ public class ContactServiceTests
         });
         await context.SaveChangesAsync();
 
-        var service = new ContactService(context);
+        var service = CreateService(context);
         var byName = await service.SearchUsersAsync(currentUser.Id, "Jane");
         var byPhone = await service.SearchUsersAsync(currentUser.Id, friend.PhoneNumber);
 
@@ -69,7 +70,7 @@ public class ContactServiceTests
         context.Users.Add(user);
         await context.SaveChangesAsync();
 
-        var service = new ContactService(context);
+        var service = CreateService(context);
 
         var result = await service.SearchUsersAsync(user.Id, query);
 
@@ -84,7 +85,7 @@ public class ContactServiceTests
         var addressee = CreateUser("0900000002", "Addressee");
         context.Users.AddRange(requester, addressee);
         await context.SaveChangesAsync();
-        var service = new ContactService(context);
+        var service = CreateService(context);
 
         var sent = await service.SendFriendRequestAsync(requester.Id, $" {addressee.PhoneNumber} ");
         var reverseDuplicate = await service.SendFriendRequestAsync(addressee.Id, requester.PhoneNumber);
@@ -106,7 +107,7 @@ public class ContactServiceTests
         var user = CreateUser("0900000001", "Test User");
         context.Users.Add(user);
         await context.SaveChangesAsync();
-        var service = new ContactService(context);
+        var service = CreateService(context);
 
         Assert.False(await service.SendFriendRequestAsync(user.Id, user.PhoneNumber));
         Assert.False(await service.SendFriendRequestAsync(user.Id, "0900000099"));
@@ -134,12 +135,19 @@ public class ContactServiceTests
         context.Users.AddRange(requester, addressee);
         context.Friendships.Add(request);
         await context.SaveChangesAsync();
-        var service = new ContactService(context);
+        var notifier = new TestChatNotifier();
+        var service = new ContactService(context, new ConversationService(context, notifier));
 
         Assert.False(await service.RespondToRequestAsync(requester.Id, request.Id, accept: true));
+        Assert.Empty(await context.Conversations.ToListAsync());
         Assert.True(await service.RespondToRequestAsync(addressee.Id, request.Id, accept: true));
         Assert.False(await service.RespondToRequestAsync(addressee.Id, request.Id, accept: false));
         Assert.Equal(FriendshipStatus.Accepted, request.Status);
+        var conversation = Assert.Single(await context.Conversations.ToListAsync());
+        Assert.Equal(2, await context.ConversationMembers.CountAsync(member =>
+            member.ConversationId == conversation.Id));
+        Assert.Contains(requester.Id, notifier.NotifiedUserIds);
+        Assert.Contains(addressee.Id, notifier.NotifiedUserIds);
     }
 
     [Fact]
@@ -150,7 +158,7 @@ public class ContactServiceTests
         var addressee = CreateUser("0900000002", "Addressee");
         context.Users.AddRange(requester, addressee);
         await context.SaveChangesAsync();
-        var service = new ContactService(context);
+        var service = CreateService(context);
 
         Assert.True(await service.SendFriendRequestAsync(requester.Id, addressee.PhoneNumber));
         var request = await context.Friendships.SingleAsync();
@@ -174,7 +182,7 @@ public class ContactServiceTests
             CreateFriendship(user, outgoing, FriendshipStatus.Pending));
         await context.SaveChangesAsync();
 
-        var requests = await new ContactService(context).GetRequestsAsync(user.Id);
+        var requests = await CreateService(context).GetRequestsAsync(user.Id);
 
         Assert.Equal(incoming.Id, Assert.Single(requests.Received).UserId);
         Assert.Equal(outgoing.Id, Assert.Single(requests.Sent).UserId);
@@ -189,7 +197,7 @@ public class ContactServiceTests
         context.Users.AddRange(blocker, blocked);
         context.Friendships.Add(CreateFriendship(blocker, blocked, FriendshipStatus.Accepted));
         await context.SaveChangesAsync();
-        var service = new ContactService(context);
+        var service = CreateService(context);
 
         Assert.True(await service.BlockUserAsync(blocker.Id, blocked.Id));
         Assert.Empty(await service.SearchUsersAsync(blocked.Id, "Blocker"));
@@ -209,7 +217,7 @@ public class ContactServiceTests
         context.Friendships.Add(CreateFriendship(user, friend, FriendshipStatus.Accepted));
         await context.SaveChangesAsync();
 
-        Assert.True(await new ContactService(context).RemoveFriendAsync(user.Id, friend.Id));
+        Assert.True(await CreateService(context).RemoveFriendAsync(user.Id, friend.Id));
         Assert.Empty(await context.Friendships.ToListAsync());
     }
 
@@ -226,7 +234,7 @@ public class ContactServiceTests
             CreateFriendship(currentUser, pendingUser, FriendshipStatus.Pending));
         await context.SaveChangesAsync();
 
-        var service = new ContactService(context);
+        var service = CreateService(context);
         var result = await service.GetFriendsAsync(currentUser.Id);
 
         var friendResult = Assert.Single(result);
@@ -262,6 +270,32 @@ public class ContactServiceTests
             validateAllProperties: true);
 
         Assert.False(isValid);
+    }
+
+    private static ContactService CreateService(AppDbContext context) =>
+        new(context, new ConversationService(context, new TestChatNotifier()));
+
+    private sealed class TestChatNotifier : IChatNotifier
+    {
+        public List<Guid> NotifiedUserIds { get; } = [];
+
+        public Task ConversationCreatedAsync(Guid userId, ConversationSummaryDto conversation)
+        {
+            NotifiedUserIds.Add(userId);
+            return Task.CompletedTask;
+        }
+
+        public Task ConversationMemberAddedAsync(Guid userId, ConversationSummaryDto conversation) =>
+            Task.CompletedTask;
+
+        public Task ConversationMembersRemovedAsync(
+            Guid conversationId,
+            IReadOnlyCollection<Guid> removedUserIds,
+            IReadOnlyCollection<Guid> remainingUserIds) =>
+            Task.CompletedTask;
+
+        public Task ConversationRenamedAsync(Guid conversationId, string name) =>
+            Task.CompletedTask;
     }
 
     private static Friendship CreateFriendship(User requester, User addressee, FriendshipStatus status) => new()

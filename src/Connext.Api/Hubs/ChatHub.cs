@@ -12,6 +12,13 @@ namespace Connext.Api.Hubs;
 [Authorize]
 public class ChatHub : Hub
 {
+    private static readonly IReadOnlyDictionary<string, string> AllowedCallSignals =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["offer"] = "offer",
+            ["answer"] = "answer"
+        };
+
     private readonly AppDbContext _context;
     private readonly IConversationService _conversationService;
     private readonly IConnectionTracker _connectionTracker;
@@ -172,40 +179,56 @@ public class ChatHub : Hub
 
         public async Task InviteCall(Guid conversationId, Guid recipientId)
         {
-            var userId = GetUserId();
-            if (!await _conversationService.IsMemberAsync(userId, conversationId) ||
-                !await _conversationService.IsMemberAsync(recipientId, conversationId))
-                throw new HubException("Người dùng không thuộc cuộc hội thoại.");
+            var userId = await EnsureCallPeerAsync(conversationId, recipientId);
             await Clients.Group(UserRoom(recipientId)).SendAsync("CallIncoming", conversationId, userId);
         }
 
         public async Task AnswerCall(Guid conversationId, Guid callerId, bool accepted)
         {
-            var userId = GetUserId();
+            var userId = await EnsureCallPeerAsync(conversationId, callerId);
             await Clients.Group(UserRoom(callerId))
                 .SendAsync("CallAnswered", conversationId, userId, accepted);
         }
 
         public async Task SendIceCandidate(Guid conversationId, Guid recipientId, object candidate)
         {
-            var userId = GetUserId();
+            var userId = await EnsureCallPeerAsync(conversationId, recipientId);
             await Clients.Group(UserRoom(recipientId))
                 .SendAsync("IceCandidate", conversationId, userId, candidate);
         }
 
         public async Task SendSignal(Guid conversationId, Guid recipientId, string type, object payload)
         {
-            var userId = GetUserId();
+            if (string.IsNullOrWhiteSpace(type) || !AllowedCallSignals.TryGetValue(type, out var signalEvent))
+                throw new HubException("Loại tín hiệu cuộc gọi không hợp lệ.");
+            var userId = await EnsureCallPeerAsync(conversationId, recipientId);
             await Clients.Group(UserRoom(recipientId))
-                .SendAsync(type, conversationId, userId, payload);
+                .SendAsync(signalEvent, conversationId, userId, payload);
         }
 
         public async Task EndCall(Guid conversationId, Guid recipientId)
         {
-            var userId = GetUserId();
+            var userId = await EnsureCallPeerAsync(conversationId, recipientId);
             await Clients.Group(UserRoom(recipientId))
                 .SendAsync("CallEnded", conversationId, userId);
         }
+
+    private async Task<Guid> EnsureCallPeerAsync(Guid conversationId, Guid peerId)
+    {
+        var userId = GetUserId();
+        if (peerId == userId ||
+            !await _conversationService.IsMemberAsync(userId, conversationId) ||
+            !await _conversationService.IsMemberAsync(peerId, conversationId))
+            throw new HubException("Người dùng không thuộc cuộc hội thoại.");
+
+        var isBlocked = await _context.UserBlocks.AnyAsync(block =>
+            block.BlockerId == userId && block.BlockedUserId == peerId ||
+            block.BlockerId == peerId && block.BlockedUserId == userId);
+        if (isBlocked)
+            throw new HubException("Không thể gửi tín hiệu đến người dùng này.");
+
+        return userId;
+    }
 
     private async Task<List<Guid>> GetUnblockedFriendIdsAsync(Guid userId) =>
         await _context.Friendships

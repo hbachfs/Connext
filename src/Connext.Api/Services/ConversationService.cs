@@ -89,7 +89,8 @@ public class ConversationService : IConversationService
         {
             ConversationId = conversation.Id,
             UserId = userId,
-            JoinedAt = conversation.CreatedAt
+            JoinedAt = conversation.CreatedAt,
+            Role = userId == creatorId ? ConversationMemberRole.Admin : ConversationMemberRole.Member
         }).ToList();
 
         _context.Conversations.Add(conversation);
@@ -274,6 +275,7 @@ public class ConversationService : IConversationService
             Role = ConversationMemberRole.Member
         });
         await _context.SaveChangesAsync();
+        await _chatNotifier.ConversationMemberAddedAsync(memberId, await BuildSummaryAsync(conversation));
     }
 
     public async Task RemoveMemberAsync(Guid userId, Guid conversationId, Guid memberId)
@@ -286,9 +288,15 @@ public class ConversationService : IConversationService
         var member = conversation.Members.FirstOrDefault(item => item.UserId == memberId);
         if (member is null)
             throw new InvalidOperationException("Người dùng không thuộc nhóm.");
+        if (IsLastAdmin(conversation, member))
+            throw new InvalidOperationException("Nhóm phải có ít nhất một quản trị viên.");
         conversation.Members.Remove(member);
         _context.ConversationMembers.Remove(member);
         await _context.SaveChangesAsync();
+        await _chatNotifier.ConversationMembersRemovedAsync(
+            conversationId,
+            [memberId],
+            conversation.Members.Select(item => item.UserId).ToArray());
     }
 
     public async Task LeaveGroupAsync(Guid userId, Guid conversationId)
@@ -298,11 +306,21 @@ public class ConversationService : IConversationService
         var member = conversation?.Members.FirstOrDefault(item => item.UserId == userId);
         if (conversation is null || member is null)
             throw new InvalidOperationException("Bạn không thuộc nhóm này.");
+        var conversationWillBeDeleted = conversation.Members.Count - 1 < 3;
+        if (!conversationWillBeDeleted && IsLastAdmin(conversation, member))
+            throw new InvalidOperationException("Hãy chuyển quyền quản trị trước khi rời nhóm.");
+        var removedUserIds = new List<Guid> { userId };
         conversation.Members.Remove(member);
         _context.ConversationMembers.Remove(member);
-        if (conversation.Members.Count < 3)
+        var remainingUserIds = conversation.Members.Select(item => item.UserId).ToList();
+        if (conversationWillBeDeleted)
+        {
+            removedUserIds.AddRange(conversation.Members.Select(item => item.UserId));
+            remainingUserIds.Clear();
             _context.Conversations.Remove(conversation);
+        }
         await _context.SaveChangesAsync();
+        await _chatNotifier.ConversationMembersRemovedAsync(conversationId, removedUserIds, remainingUserIds);
     }
 
     public async Task RenameGroupAsync(Guid userId, Guid conversationId, string name)
@@ -312,16 +330,21 @@ public class ConversationService : IConversationService
             throw new InvalidOperationException("Tên nhóm không hợp lệ.");
         conversation.Name = name.Trim();
         await _context.SaveChangesAsync();
+        await _chatNotifier.ConversationRenamedAsync(conversationId, conversation.Name);
     }
 
     public async Task ChangeMemberRoleAsync(Guid userId, Guid conversationId, Guid memberId, string role)
     {
         var conversation = await GetAdminConversationAsync(userId, conversationId);
-        if (!Enum.TryParse<ConversationMemberRole>(role, true, out var newRole))
+        if (!Enum.TryParse<ConversationMemberRole>(role, true, out var newRole) || !Enum.IsDefined(newRole))
             throw new InvalidOperationException("Vai trò không hợp lệ.");
         var member = conversation.Members.FirstOrDefault(item => item.UserId == memberId);
         if (member is null)
             throw new InvalidOperationException("Người dùng không thuộc nhóm.");
+        if (member.Role != newRole &&
+            newRole != ConversationMemberRole.Admin &&
+            IsLastAdmin(conversation, member))
+            throw new InvalidOperationException("Nhóm phải có ít nhất một quản trị viên.");
         member.Role = newRole;
         await _context.SaveChangesAsync();
     }
@@ -452,6 +475,14 @@ public class ConversationService : IConversationService
             otherUserIds.Contains(block.BlockerId) && block.BlockedUserId == userId ||
             block.BlockerId == userId && otherUserIds.Contains(block.BlockedUserId));
 
+    private static bool IsLastAdmin(Conversation conversation, ConversationMember member) =>
+        IsAdmin(conversation, member) &&
+        !conversation.Members.Any(other =>
+            other.UserId != member.UserId && IsAdmin(conversation, other));
+
+    private static bool IsAdmin(Conversation conversation, ConversationMember member) =>
+        member.Role == ConversationMemberRole.Admin || conversation.CreatedById == member.UserId;
+
     private async Task<Conversation> GetAdminConversationAsync(Guid userId, Guid conversationId)
     {
         var conversation = await _context.Conversations.Include(item => item.Members)
@@ -459,8 +490,7 @@ public class ConversationService : IConversationService
         var member = conversation?.Members.FirstOrDefault(item => item.UserId == userId);
         if (conversation is null || member is null)
             throw new InvalidOperationException("Bạn không thuộc cuộc hội thoại này.");
-        if (!conversation.IsGroup || member.Role != ConversationMemberRole.Admin &&
-            conversation.CreatedById != userId)
+        if (!conversation.IsGroup || !IsAdmin(conversation, member))
             throw new InvalidOperationException("Chỉ quản trị viên mới có quyền thực hiện.");
         return conversation;
     }

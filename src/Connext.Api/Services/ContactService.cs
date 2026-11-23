@@ -22,10 +22,12 @@ public interface IContactService
 public class ContactService : IContactService
 {
     private readonly AppDbContext _context;
+    private readonly IConversationService _conversationService;
 
-    public ContactService(AppDbContext context)
+    public ContactService(AppDbContext context, IConversationService conversationService)
     {
         _context = context;
+        _conversationService = conversationService;
     }
 
     public async Task<List<UserSearchResponseDto>> SearchUsersAsync(Guid currentUserId, string query)
@@ -166,6 +168,8 @@ public class ContactService : IContactService
         request.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+        if (accept)
+            await _conversationService.CreateDirectAsync(userId, request.RequesterId);
         return true;
     }
 

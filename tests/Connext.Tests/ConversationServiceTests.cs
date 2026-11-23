@@ -71,6 +71,194 @@ public class ConversationServiceTests
     }
 
     [Fact]
+    public async Task RemoveMemberAsync_RemovesMemberFromActiveConversationConnections()
+    {
+        using var context = CreateDbContext();
+        var creator = CreateUser("Creator");
+        var firstFriend = CreateUser("First");
+        var secondFriend = CreateUser("Second");
+        var thirdFriend = CreateUser("Third");
+        context.Users.AddRange(creator, firstFriend, secondFriend, thirdFriend);
+        context.Friendships.AddRange(
+            CreateFriendship(creator, firstFriend),
+            CreateFriendship(creator, secondFriend),
+            CreateFriendship(creator, thirdFriend));
+        await context.SaveChangesAsync();
+        var notifier = new TestChatNotifier();
+        var service = new ConversationService(context, notifier);
+        var group = await service.CreateGroupAsync(creator.Id, new CreateGroupConversationDto
+        {
+            Name = "Team",
+            MemberIds = [firstFriend.Id, secondFriend.Id, thirdFriend.Id]
+        });
+
+        await service.RemoveMemberAsync(creator.Id, group.Id, firstFriend.Id);
+
+        Assert.Equal((group.Id, firstFriend.Id), Assert.Single(notifier.RemovedMembers));
+    }
+
+    [Fact]
+    public async Task LeaveGroupAsync_RemovesLeavingMemberFromActiveConversationConnections()
+    {
+        using var context = CreateDbContext();
+        var creator = CreateUser("Creator");
+        var firstFriend = CreateUser("First");
+        var secondFriend = CreateUser("Second");
+        var thirdFriend = CreateUser("Third");
+        context.Users.AddRange(creator, firstFriend, secondFriend, thirdFriend);
+        context.Friendships.AddRange(
+            CreateFriendship(creator, firstFriend),
+            CreateFriendship(creator, secondFriend),
+            CreateFriendship(creator, thirdFriend));
+        await context.SaveChangesAsync();
+        var notifier = new TestChatNotifier();
+        var service = new ConversationService(context, notifier);
+        var group = await service.CreateGroupAsync(creator.Id, new CreateGroupConversationDto
+        {
+            Name = "Team",
+            MemberIds = [firstFriend.Id, secondFriend.Id, thirdFriend.Id]
+        });
+
+        await service.LeaveGroupAsync(firstFriend.Id, group.Id);
+
+        Assert.Equal((group.Id, firstFriend.Id), Assert.Single(notifier.RemovedMembers));
+        Assert.True(await context.Conversations.AnyAsync(conversation => conversation.Id == group.Id));
+    }
+
+    [Fact]
+    public async Task AddMemberAsync_NotifiesAndJoinsTheNewMember()
+    {
+        using var context = CreateDbContext();
+        var creator = CreateUser("Creator");
+        var firstFriend = CreateUser("First");
+        var secondFriend = CreateUser("Second");
+        var newFriend = CreateUser("New");
+        context.Users.AddRange(creator, firstFriend, secondFriend, newFriend);
+        context.Friendships.AddRange(
+            CreateFriendship(creator, firstFriend),
+            CreateFriendship(creator, secondFriend),
+            CreateFriendship(creator, newFriend));
+        await context.SaveChangesAsync();
+        var notifier = new TestChatNotifier();
+        var service = new ConversationService(context, notifier);
+        var group = await service.CreateGroupAsync(creator.Id, new CreateGroupConversationDto
+        {
+            Name = "Team",
+            MemberIds = [firstFriend.Id, secondFriend.Id]
+        });
+
+        await service.AddMemberAsync(creator.Id, group.Id, newFriend.Id);
+
+        Assert.Equal(newFriend.Id, Assert.Single(notifier.AddedMemberIds));
+        Assert.Contains(newFriend.Id, notifier.NotifiedUserIds);
+        Assert.Equal(4, await context.ConversationMembers.CountAsync(member => member.ConversationId == group.Id));
+    }
+
+    [Fact]
+    public async Task AddMemberAsync_RejectsNonAdminMembers()
+    {
+        using var context = CreateDbContext();
+        var creator = CreateUser("Creator");
+        var firstFriend = CreateUser("First");
+        var secondFriend = CreateUser("Second");
+        var newFriend = CreateUser("New");
+        context.Users.AddRange(creator, firstFriend, secondFriend, newFriend);
+        context.Friendships.AddRange(
+            CreateFriendship(creator, firstFriend),
+            CreateFriendship(creator, secondFriend),
+            CreateFriendship(creator, newFriend));
+        await context.SaveChangesAsync();
+        var service = new ConversationService(context, new TestChatNotifier());
+        var group = await service.CreateGroupAsync(creator.Id, new CreateGroupConversationDto
+        {
+            Name = "Team",
+            MemberIds = [firstFriend.Id, secondFriend.Id]
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.AddMemberAsync(firstFriend.Id, group.Id, newFriend.Id));
+
+        Assert.False(await context.ConversationMembers.AnyAsync(member =>
+            member.ConversationId == group.Id && member.UserId == newFriend.Id));
+    }
+
+    [Fact]
+    public async Task RenameGroupAsync_NotifiesMembersOfTheNewName()
+    {
+        using var context = CreateDbContext();
+        var creator = CreateUser("Creator");
+        var firstFriend = CreateUser("First");
+        var secondFriend = CreateUser("Second");
+        context.Users.AddRange(creator, firstFriend, secondFriend);
+        context.Friendships.AddRange(CreateFriendship(creator, firstFriend), CreateFriendship(creator, secondFriend));
+        await context.SaveChangesAsync();
+        var notifier = new TestChatNotifier();
+        var service = new ConversationService(context, notifier);
+        var group = await service.CreateGroupAsync(creator.Id, new CreateGroupConversationDto
+        {
+            Name = "Team",
+            MemberIds = [firstFriend.Id, secondFriend.Id]
+        });
+
+        await service.RenameGroupAsync(creator.Id, group.Id, "Renamed team");
+
+        Assert.Equal((group.Id, "Renamed team"), Assert.Single(notifier.RenamedConversations));
+    }
+
+    [Fact]
+    public async Task ChangeMemberRoleAsync_PreventsDemotingTheLastAdmin()
+    {
+        using var context = CreateDbContext();
+        var creator = CreateUser("Creator");
+        var firstFriend = CreateUser("First");
+        var secondFriend = CreateUser("Second");
+        context.Users.AddRange(creator, firstFriend, secondFriend);
+        context.Friendships.AddRange(CreateFriendship(creator, firstFriend), CreateFriendship(creator, secondFriend));
+        await context.SaveChangesAsync();
+        var service = new ConversationService(context, new TestChatNotifier());
+        var group = await service.CreateGroupAsync(creator.Id, new CreateGroupConversationDto
+        {
+            Name = "Team",
+            MemberIds = [firstFriend.Id, secondFriend.Id]
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ChangeMemberRoleAsync(creator.Id, group.Id, creator.Id, "Member"));
+
+        Assert.Equal(
+            ConversationMemberRole.Admin,
+            (await context.ConversationMembers.SingleAsync(member =>
+                member.ConversationId == group.Id && member.UserId == creator.Id)).Role);
+    }
+
+    [Fact]
+    public async Task LeaveGroupAsync_PreventsLastAdminLeavingWhenGroupRemains()
+    {
+        using var context = CreateDbContext();
+        var creator = CreateUser("Creator");
+        var firstFriend = CreateUser("First");
+        var secondFriend = CreateUser("Second");
+        var thirdFriend = CreateUser("Third");
+        context.Users.AddRange(creator, firstFriend, secondFriend, thirdFriend);
+        context.Friendships.AddRange(
+            CreateFriendship(creator, firstFriend),
+            CreateFriendship(creator, secondFriend),
+            CreateFriendship(creator, thirdFriend));
+        await context.SaveChangesAsync();
+        var service = new ConversationService(context, new TestChatNotifier());
+        var group = await service.CreateGroupAsync(creator.Id, new CreateGroupConversationDto
+        {
+            Name = "Team",
+            MemberIds = [firstFriend.Id, secondFriend.Id, thirdFriend.Id]
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.LeaveGroupAsync(creator.Id, group.Id));
+
+        Assert.True(await context.ConversationMembers.AnyAsync(member =>
+            member.ConversationId == group.Id && member.UserId == creator.Id));
+    }
+
+    [Fact]
     public async Task SendMessageAsync_ValidatesMembershipAndRecordsActualDelivery()
     {
         using var context = CreateDbContext();
@@ -214,10 +402,35 @@ public class ConversationServiceTests
     private sealed class TestChatNotifier : IChatNotifier
     {
         public List<Guid> NotifiedUserIds { get; } = [];
+        public List<Guid> AddedMemberIds { get; } = [];
+        public List<(Guid ConversationId, Guid UserId)> RemovedMembers { get; } = [];
+        public List<(Guid ConversationId, string Name)> RenamedConversations { get; } = [];
 
         public Task ConversationCreatedAsync(Guid userId, ConversationSummaryDto conversation)
         {
             NotifiedUserIds.Add(userId);
+            return Task.CompletedTask;
+        }
+
+        public Task ConversationMemberAddedAsync(Guid userId, ConversationSummaryDto conversation)
+        {
+            AddedMemberIds.Add(userId);
+            NotifiedUserIds.Add(userId);
+            return Task.CompletedTask;
+        }
+
+        public Task ConversationMembersRemovedAsync(
+            Guid conversationId,
+            IReadOnlyCollection<Guid> removedUserIds,
+            IReadOnlyCollection<Guid> remainingUserIds)
+        {
+            RemovedMembers.AddRange(removedUserIds.Select(userId => (conversationId, userId)));
+            return Task.CompletedTask;
+        }
+
+        public Task ConversationRenamedAsync(Guid conversationId, string name)
+        {
+            RenamedConversations.Add((conversationId, name));
             return Task.CompletedTask;
         }
     }
