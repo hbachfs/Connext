@@ -37,4 +37,14 @@ public class AuthRateLimitTests
 
         Assert.Equal(AuthRateLimitPolicy.Name, attribute.PolicyName);
     }
+
+    [Fact]
+    public void VerifyOtpEndpoint_UsesAuthRateLimitPolicy()
+    {
+        var method = typeof(PasswordResetController).GetMethod(nameof(PasswordResetController.VerifyOtp));
+
+        var attribute = Assert.Single(method!.GetCustomAttributes<EnableRateLimitingAttribute>());
+
+        Assert.Equal(AuthRateLimitPolicy.Name, attribute.PolicyName);
+    }
 }

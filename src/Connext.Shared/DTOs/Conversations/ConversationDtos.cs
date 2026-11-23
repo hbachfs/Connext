@@ -17,6 +17,7 @@ public class ConversationSummaryDto
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
     public bool IsGroup { get; set; }
     public DateTime CreatedAt { get; set; }
     public MessageSummaryDto? LastMessage { get; set; }
@@ -53,6 +54,7 @@ public class MessageResponseDto : MessageSummaryDto
     public string SenderDisplayName { get; set; } = string.Empty;
     public List<Guid> DeliveredToUserIds { get; set; } = [];
     public Guid? ReplyToMessageId { get; set; }
+    public MessageSummaryDto? ReplyToMessage { get; set; }
     public Dictionary<string, List<Guid>> Reactions { get; set; } = [];
     public bool IsPinned { get; set; }
     public bool IsDeleted { get; set; }
@@ -78,6 +80,19 @@ public class ChangeMemberRoleDto
     [Required]
     [RegularExpression("Member|Admin")]
     public string Role { get; set; } = "Member";
+}
+
+public class UpdateGroupAvatarDto
+{
+    [StringLength(500)]
+    public string? AvatarUrl { get; set; }
+}
+
+public class IceServerDto
+{
+    public string[] Urls { get; set; } = [];
+    public string? Username { get; set; }
+    public string? Credential { get; set; }
 }
 
 public class AddMessageReactionDto

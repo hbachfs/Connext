@@ -34,14 +34,24 @@ Các API dưới đây yêu cầu JWT Bearer:
 | `POST` / `DELETE` | `/api/contacts/blocks/{userId}` | Chặn hoặc bỏ chặn; chặn sẽ xóa quan hệ bạn bè/lời mời hiện tại |
 | `GET` | `/api/conversations` | Danh sách hội thoại, tin nhắn cuối và số tin chưa đọc |
 | `POST` | `/api/conversations/groups` | Tạo nhóm; cần ít nhất 3 người tính cả người tạo và các thành viên khác phải là bạn |
+| `PUT` | `/api/conversations/{id}` | Đổi tên nhóm; chỉ quản trị viên |
+| `PUT` | `/api/conversations/{id}/avatar` | Cập nhật hoặc xóa ảnh đại diện nhóm; chỉ quản trị viên |
+| `PUT` | `/api/conversations/{id}/members/{memberId}/role` | Đổi vai trò thành viên; chỉ quản trị viên |
+| `POST` / `DELETE` | `/api/conversations/{id}/messages/{messageId}/pin` | Ghim hoặc bỏ ghim tin nhắn |
+| `GET` | `/api/conversations/{id}/pins` | Danh sách tin nhắn đã ghim |
 | `GET` | `/api/conversations/{id}/messages?pageSize=50` | Lấy tin nhắn; `pageSize` từ 1 đến tối đa 50 |
 | `POST` | `/api/conversations/{id}/read` | Cập nhật mốc đã đọc để tính số tin chưa đọc |
 
 Kết nối thời gian thực dùng SignalR tại `/hubs/chat`, xác thực JWT qua
-`access_token`. Hub hỗ trợ `JoinConversation`, `SendMessage`, `Typing` và
-`AcknowledgeDelivered`; các sự kiện client nhận gồm `ConversationCreated`,
-`ReceiveMessage`, `Typing`, `MessageDelivered` và `OnlineChanged`. Loại tin nhắn
-được giới hạn trong `Text`, `Image`, `File`; nội dung tối đa 4.000 ký tự.
+`access_token`. Hub hỗ trợ `JoinConversation`, `SendMessage`, `Typing`,
+`AcknowledgeDelivered`, `GetIceServers` và signaling cuộc gọi; các sự kiện cập nhật nhóm gồm
+`ConversationMemberAdded`, `ConversationMemberRemoved`,
+`ConversationMemberRoleChanged`, `ConversationRenamed` và `GroupAvatarUpdated`.
+API gửi tin nhắn chỉ nhận loại `Text`, `Image`, `File`; lịch sử cuộc gọi được
+ghi dưới loại `Call`. Nội dung tối đa 4.000 ký tự.
+Cuộc gọi 1-1 hỗ trợ `InviteCall`, `AnswerCall`, `SendSignal` (`offer`/`answer`),
+`SendIceCandidate` và `EndCall`; cuộc gọi không được trả lời sau 30 giây sẽ phát
+sự kiện nhỡ và ghi lịch sử cuộc gọi.
 
 Nginx reverse proxy mẫu nằm tại `deploy/nginx/default.conf`. Cấu hình chuyển
 `/hubs/chat` và các yêu cầu API tới `127.0.0.1:5232` (cổng HTTP trong profile
@@ -58,7 +68,8 @@ Sau khi cấu hình SQL Server, áp dụng schema mới bằng:
   `PUT /api/users/me` trước khi yêu cầu đặt lại mật khẩu.
 - `POST /api/auth/forgot-password`, `POST /api/auth/verify-otp`,
   `POST /api/auth/reset-password` dùng OTP 6 số (hết hạn sau 10 phút, tối đa 5
-  lần nhập sai, gửi lại sau 60 giây). SMTP cần cấu hình `Smtp:Host`,
+  lần nhập sai, gửi lại sau 60 giây). Đăng nhập, gửi OTP và xác minh OTP được
+  giới hạn 5 yêu cầu/phút theo IP. SMTP cần cấu hình `Smtp:Host`,
   `Smtp:Port`, `Smtp:Username`, `Smtp:Password`, `Smtp:From` và `Smtp:EnableSsl`
   qua User Secrets hoặc biến môi trường.
 - `GET/PUT /api/users/me` đọc/cập nhật hồ sơ; `PUT /api/users/me/password` đổi
@@ -66,6 +77,17 @@ Sau khi cấu hình SQL Server, áp dụng schema mới bằng:
   offline.
 - CORS chỉ cho phép các origin khai báo trong `Cors:AllowedOrigins`, ví dụ
   `Cors__AllowedOrigins__0=https://localhost:5001`; danh sách mặc định rỗng.
+- Khi chạy sau reverse proxy, chỉ cấu hình IP proxy đáng tin cậy trong
+  `ForwardedHeaders:KnownProxies` để giới hạn đăng nhập/OTP theo IP client đúng
+  mà không tin header chuyển tiếp từ nguồn không xác thực. Mặc định chỉ proxy
+  loopback được tin cậy; ví dụ proxy cục bộ dùng
+  `ForwardedHeaders__KnownProxies__0=127.0.0.1`.
+- WebRTC không dùng máy chủ STUN/TURN viết cứng. Cấu hình danh sách qua
+  `WebRtc:IceServers` (ví dụ biến môi trường
+  `WebRtc__IceServers__0__Urls__0=stun:stun.example.com:3478` và
+  `WebRtc__IceServers__1__Urls__0=turn:turn.example.com:3478`); đặt username và
+  credential TURN trong User Secrets/secret store. Chỉ thành viên hội thoại mới
+  gọi được `GetIceServers`.
 - Số điện thoại Việt Nam được chuẩn hóa về E.164 (`+84...`) khi đăng ký, đăng
   nhập và tìm kiếm. Migration chuẩn hóa dữ liệu hiện có và dừng nếu phát hiện
   số trùng sau chuẩn hóa.

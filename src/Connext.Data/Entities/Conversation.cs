@@ -4,6 +4,7 @@ public class Conversation
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string? Name { get; set; }
+    public string? AvatarUrl { get; set; }
     public bool IsGroup { get; set; }
     public Guid CreatedById { get; set; }
     public User CreatedBy { get; set; } = null!;

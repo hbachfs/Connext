@@ -11,4 +11,11 @@ public interface IChatNotifier
         IReadOnlyCollection<Guid> removedUserIds,
         IReadOnlyCollection<Guid> remainingUserIds);
     Task ConversationRenamedAsync(Guid conversationId, string name);
+    Task ConversationMemberRoleChangedAsync(Guid conversationId, Guid memberId, string role);
+    Task GroupAvatarUpdatedAsync(Guid conversationId, string? avatarUrl);
+    Task MessageReactionAddedAsync(Guid conversationId, Guid messageId, Guid userId, string emoji);
+    Task MessageReactionRemovedAsync(Guid conversationId, Guid messageId, Guid userId, string emoji);
+    Task MessagePinnedAsync(Guid conversationId, Guid messageId, Guid userId);
+    Task MessageUnpinnedAsync(Guid conversationId, Guid messageId, Guid userId);
+    Task CallHistoryRecordedAsync(Guid conversationId, MessageResponseDto message);
 }

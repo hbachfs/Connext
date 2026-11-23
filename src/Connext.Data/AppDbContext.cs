@@ -69,6 +69,7 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(conversation => conversation.Id);
             entity.Property(conversation => conversation.Name).HasMaxLength(100);
+            entity.Property(conversation => conversation.AvatarUrl).HasMaxLength(500);
             entity.HasOne(conversation => conversation.CreatedBy).WithMany().HasForeignKey(conversation => conversation.CreatedById)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(conversation => conversation.CreatedAt);

@@ -86,6 +86,13 @@ public class ConversationsController : ControllerBase
             catch (InvalidOperationException exception) { return BadRequest(new { message = exception.Message }); }
         }
 
+        [HttpPut("{conversationId:guid}/avatar")]
+        public async Task<IActionResult> SetGroupAvatar(Guid conversationId, [FromBody] UpdateGroupAvatarDto request)
+        {
+            try { await _conversationService.SetGroupAvatarAsync(CurrentUserId, conversationId, request.AvatarUrl); return NoContent(); }
+            catch (InvalidOperationException exception) { return BadRequest(new { message = exception.Message }); }
+        }
+
         [HttpPut("{conversationId:guid}/members/{memberId:guid}/role")]
         public async Task<IActionResult> ChangeMemberRole(Guid conversationId, Guid memberId, [FromBody] ChangeMemberRoleDto request)
         {

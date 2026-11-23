@@ -296,6 +296,27 @@ public class ContactServiceTests
 
         public Task ConversationRenamedAsync(Guid conversationId, string name) =>
             Task.CompletedTask;
+
+        public Task ConversationMemberRoleChangedAsync(Guid conversationId, Guid memberId, string role) =>
+            Task.CompletedTask;
+
+        public Task GroupAvatarUpdatedAsync(Guid conversationId, string? avatarUrl) =>
+            Task.CompletedTask;
+
+        public Task MessageReactionAddedAsync(Guid conversationId, Guid messageId, Guid userId, string emoji) =>
+            Task.CompletedTask;
+
+        public Task MessageReactionRemovedAsync(Guid conversationId, Guid messageId, Guid userId, string emoji) =>
+            Task.CompletedTask;
+
+        public Task MessagePinnedAsync(Guid conversationId, Guid messageId, Guid userId) =>
+            Task.CompletedTask;
+
+        public Task MessageUnpinnedAsync(Guid conversationId, Guid messageId, Guid userId) =>
+            Task.CompletedTask;
+
+        public Task CallHistoryRecordedAsync(Guid conversationId, MessageResponseDto message) =>
+            Task.CompletedTask;
     }
 
     private static Friendship CreateFriendship(User requester, User addressee, FriendshipStatus status) => new()

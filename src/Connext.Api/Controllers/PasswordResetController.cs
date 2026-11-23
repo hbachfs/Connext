@@ -25,6 +25,7 @@ public class PasswordResetController : ControllerBase
     }
 
     [HttpPost("verify-otp")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequestDto request)
     {
         var token = await _passwordResetService.VerifyOtpAsync(request.Email, request.Code);

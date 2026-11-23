@@ -55,4 +55,32 @@ public class ChatNotifier : IChatNotifier
     public Task ConversationRenamedAsync(Guid conversationId, string name) =>
         _hubContext.Clients.Group(ChatHub.ConversationRoom(conversationId))
             .SendAsync("ConversationRenamed", conversationId, name);
+
+    public Task ConversationMemberRoleChangedAsync(Guid conversationId, Guid memberId, string role) =>
+        _hubContext.Clients.Group(ChatHub.ConversationRoom(conversationId))
+            .SendAsync("ConversationMemberRoleChanged", conversationId, memberId, role);
+
+    public Task GroupAvatarUpdatedAsync(Guid conversationId, string? avatarUrl) =>
+        _hubContext.Clients.Group(ChatHub.ConversationRoom(conversationId))
+            .SendAsync("GroupAvatarUpdated", conversationId, avatarUrl);
+
+    public Task MessageReactionAddedAsync(Guid conversationId, Guid messageId, Guid userId, string emoji) =>
+        _hubContext.Clients.Group(ChatHub.ConversationRoom(conversationId))
+            .SendAsync("ReactionAdded", messageId, userId, emoji);
+
+    public Task MessageReactionRemovedAsync(Guid conversationId, Guid messageId, Guid userId, string emoji) =>
+        _hubContext.Clients.Group(ChatHub.ConversationRoom(conversationId))
+            .SendAsync("ReactionRemoved", messageId, userId, emoji);
+
+    public Task MessagePinnedAsync(Guid conversationId, Guid messageId, Guid userId) =>
+        _hubContext.Clients.Group(ChatHub.ConversationRoom(conversationId))
+            .SendAsync("MessagePinned", conversationId, messageId, userId);
+
+    public Task MessageUnpinnedAsync(Guid conversationId, Guid messageId, Guid userId) =>
+        _hubContext.Clients.Group(ChatHub.ConversationRoom(conversationId))
+            .SendAsync("MessageUnpinned", conversationId, messageId, userId);
+
+    public Task CallHistoryRecordedAsync(Guid conversationId, MessageResponseDto message) =>
+        _hubContext.Clients.Group(ChatHub.ConversationRoom(conversationId))
+            .SendAsync("ReceiveMessage", message);
 }

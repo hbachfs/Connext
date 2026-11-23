@@ -31,6 +31,7 @@ public class ConversationService : IConversationService
                         .Select(other => other.User.DisplayName)
                         .FirstOrDefault()!,
                 IsGroup = member.Conversation.IsGroup,
+                AvatarUrl = member.Conversation.AvatarUrl,
                 CreatedAt = member.Conversation.CreatedAt,
                 LastMessage = member.Conversation.Messages
                     .OrderByDescending(message => message.CreatedAt)
@@ -129,6 +130,8 @@ public class ConversationService : IConversationService
             .Include(message => message.Receipts)
             .Include(message => message.Reactions)
             .Include(message => message.Mentions)
+            .Include(message => message.ReplyToMessage)
+                .ThenInclude(reply => reply!.Sender)
             .ToListAsync();
 
         return messages.OrderBy(message => message.CreatedAt).ThenBy(message => message.Id)
@@ -153,7 +156,8 @@ public class ConversationService : IConversationService
         ArgumentNullException.ThrowIfNull(request);
         var content = request.Content?.Trim();
         if (request.ConversationId == Guid.Empty || string.IsNullOrEmpty(content) ||
-            content.Length > 4000 || !Enum.IsDefined(request.Type))
+            content.Length > 4000 ||
+            request.Type is not (MessageType.Text or MessageType.Image or MessageType.File))
             throw new InvalidOperationException("Nội dung hoặc loại tin nhắn không hợp lệ.");
 
         var conversation = await _context.Conversations
@@ -204,7 +208,45 @@ public class ConversationService : IConversationService
         await _context.SaveChangesAsync();
 
         await _context.Entry(message).Reference(item => item.Sender).LoadAsync();
+        if (message.ReplyToMessageId.HasValue)
+        {
+            await _context.Entry(message).Reference(item => item.ReplyToMessage).LoadAsync();
+            await _context.Entry(message.ReplyToMessage!).Reference(item => item.Sender).LoadAsync();
+        }
         return ToResponse(message);
+    }
+
+    public async Task<MessageResponseDto> RecordCallHistoryAsync(
+        Guid conversationId,
+        Guid callerId,
+        string result,
+        TimeSpan? duration)
+    {
+        var conversation = await _context.Conversations
+            .Include(item => item.Members)
+            .FirstOrDefaultAsync(item => item.Id == conversationId && !item.IsGroup);
+        if (conversation is null || conversation.Members.All(member => member.UserId != callerId))
+            throw new InvalidOperationException("Không thể ghi lịch sử cuộc gọi.");
+        if (string.IsNullOrWhiteSpace(result) || result.Length > 100)
+            throw new InvalidOperationException("Kết quả cuộc gọi không hợp lệ.");
+
+        var content = duration.HasValue
+            ? $"{result} ({(int)duration.Value.TotalMinutes:00}:{duration.Value.Seconds:00})"
+            : result;
+        var message = new Message
+        {
+            ConversationId = conversationId,
+            SenderId = callerId,
+            Content = content,
+            Type = MessageType.Call,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Messages.Add(message);
+        await _context.SaveChangesAsync();
+        await _context.Entry(message).Reference(item => item.Sender).LoadAsync();
+        var response = ToResponse(message);
+        await _chatNotifier.CallHistoryRecordedAsync(conversationId, response);
+        return response;
     }
 
     public async Task<ConversationSummaryDto> CreateDirectAsync(Guid userId, Guid friendId)
@@ -307,9 +349,23 @@ public class ConversationService : IConversationService
         if (conversation is null || member is null)
             throw new InvalidOperationException("Bạn không thuộc nhóm này.");
         var conversationWillBeDeleted = conversation.Members.Count - 1 < 3;
-        if (!conversationWillBeDeleted && IsLastAdmin(conversation, member))
-            throw new InvalidOperationException("Hãy chuyển quyền quản trị trước khi rời nhóm.");
         var removedUserIds = new List<Guid> { userId };
+        ConversationMember? promotedMember = null;
+        if (!conversationWillBeDeleted && conversation.CreatedById == userId)
+        {
+            promotedMember = conversation.Members
+                .Where(item => item.UserId != userId)
+                .OrderBy(item => item.Role == ConversationMemberRole.Admin ? 0 : 1)
+                .ThenBy(item => item.JoinedAt)
+                .ThenBy(item => item.UserId)
+                .First();
+            promotedMember.Role = ConversationMemberRole.Admin;
+            conversation.CreatedById = promotedMember.UserId;
+        }
+        else if (!conversationWillBeDeleted && IsLastAdmin(conversation, member))
+        {
+            throw new InvalidOperationException("Hãy chuyển quyền quản trị trước khi rời nhóm.");
+        }
         conversation.Members.Remove(member);
         _context.ConversationMembers.Remove(member);
         var remainingUserIds = conversation.Members.Select(item => item.UserId).ToList();
@@ -320,6 +376,9 @@ public class ConversationService : IConversationService
             _context.Conversations.Remove(conversation);
         }
         await _context.SaveChangesAsync();
+        if (promotedMember is not null)
+            await _chatNotifier.ConversationMemberRoleChangedAsync(
+                conversationId, promotedMember.UserId, ConversationMemberRole.Admin.ToString());
         await _chatNotifier.ConversationMembersRemovedAsync(conversationId, removedUserIds, remainingUserIds);
     }
 
@@ -331,6 +390,18 @@ public class ConversationService : IConversationService
         conversation.Name = name.Trim();
         await _context.SaveChangesAsync();
         await _chatNotifier.ConversationRenamedAsync(conversationId, conversation.Name);
+    }
+
+    public async Task SetGroupAvatarAsync(Guid userId, Guid conversationId, string? avatarUrl)
+    {
+        var conversation = await GetAdminConversationAsync(userId, conversationId);
+        if (!conversation.IsGroup)
+            throw new InvalidOperationException("Chỉ nhóm mới có ảnh đại diện nhóm.");
+        if (avatarUrl?.Trim().Length > 500)
+            throw new InvalidOperationException("Đường dẫn ảnh đại diện không hợp lệ.");
+        conversation.AvatarUrl = string.IsNullOrWhiteSpace(avatarUrl) ? null : avatarUrl.Trim();
+        await _context.SaveChangesAsync();
+        await _chatNotifier.GroupAvatarUpdatedAsync(conversationId, conversation.AvatarUrl);
     }
 
     public async Task ChangeMemberRoleAsync(Guid userId, Guid conversationId, Guid memberId, string role)
@@ -345,12 +416,18 @@ public class ConversationService : IConversationService
             newRole != ConversationMemberRole.Admin &&
             IsLastAdmin(conversation, member))
             throw new InvalidOperationException("Nhóm phải có ít nhất một quản trị viên.");
+        if (member.Role == newRole)
+            return;
         member.Role = newRole;
         await _context.SaveChangesAsync();
+        await _chatNotifier.ConversationMemberRoleChangedAsync(
+            conversationId, memberId, newRole.ToString());
     }
 
     public async Task RecallMessageAsync(Guid userId, Guid conversationId, Guid messageId)
     {
+        if (!await IsMemberAsync(userId, conversationId))
+            throw new InvalidOperationException("Bạn không thuộc cuộc hội thoại này.");
         var message = await _context.Messages.FirstOrDefaultAsync(item =>
             item.Id == messageId && item.ConversationId == conversationId);
         if (message is null || message.SenderId != userId)
@@ -372,8 +449,16 @@ public class ConversationService : IConversationService
         if (string.IsNullOrWhiteSpace(emoji) || emoji.Trim().Length > 32)
             throw new InvalidOperationException("Phản ứng không hợp lệ.");
         emoji = emoji.Trim();
-        if (!await _context.MessageReactions.AnyAsync(item =>
-                item.MessageId == messageId && item.UserId == userId && item.Emoji == emoji))
+        var existingReactions = await _context.MessageReactions
+            .Where(item => item.MessageId == messageId && item.UserId == userId)
+            .ToListAsync();
+        var existingReaction = existingReactions.FirstOrDefault(item => item.Emoji == emoji);
+        if (existingReaction is not null && existingReactions.Count == 1)
+            return;
+
+        foreach (var reaction in existingReactions.Where(item => item.Emoji != emoji))
+            _context.MessageReactions.Remove(reaction);
+        if (existingReaction is null)
         {
             _context.MessageReactions.Add(new MessageReaction
             {
@@ -381,8 +466,12 @@ public class ConversationService : IConversationService
                 UserId = userId,
                 Emoji = emoji
             });
-            await _context.SaveChangesAsync();
         }
+        await _context.SaveChangesAsync();
+        foreach (var reaction in existingReactions.Where(item => item.Emoji != emoji))
+            await _chatNotifier.MessageReactionRemovedAsync(conversationId, messageId, userId, reaction.Emoji);
+        if (existingReaction is null)
+            await _chatNotifier.MessageReactionAddedAsync(conversationId, messageId, userId, emoji);
     }
 
     public async Task RemoveReactionAsync(Guid userId, Guid conversationId, Guid messageId, string emoji)
@@ -390,11 +479,15 @@ public class ConversationService : IConversationService
         if (!await IsMemberAsync(userId, conversationId))
             throw new InvalidOperationException("Bạn không thuộc cuộc hội thoại này.");
         var reaction = await _context.MessageReactions.FirstOrDefaultAsync(item =>
-            item.MessageId == messageId && item.UserId == userId && item.Emoji == emoji);
+            item.MessageId == messageId &&
+            item.Message.ConversationId == conversationId &&
+            item.UserId == userId &&
+            item.Emoji == emoji);
         if (reaction is null)
             throw new InvalidOperationException("Phản ứng không tồn tại.");
         _context.MessageReactions.Remove(reaction);
         await _context.SaveChangesAsync();
+        await _chatNotifier.MessageReactionRemovedAsync(conversationId, messageId, userId, emoji);
     }
 
     public async Task PinMessageAsync(Guid userId, Guid conversationId, Guid messageId)
@@ -414,6 +507,7 @@ public class ConversationService : IConversationService
         message.IsPinned = true;
         message.PinnedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+        await _chatNotifier.MessagePinnedAsync(conversationId, messageId, userId);
     }
 
     public async Task UnpinMessageAsync(Guid userId, Guid conversationId, Guid messageId)
@@ -427,6 +521,7 @@ public class ConversationService : IConversationService
         message.IsPinned = false;
         message.PinnedAt = null;
         await _context.SaveChangesAsync();
+        await _chatNotifier.MessageUnpinnedAsync(conversationId, messageId, userId);
     }
 
     public async Task<List<MessageResponseDto>> GetPinnedMessagesAsync(Guid userId, Guid conversationId)
@@ -513,6 +608,7 @@ public class ConversationService : IConversationService
         {
             Id = conversation.Id,
             Name = conversation.Name ?? name.ToString(),
+            AvatarUrl = conversation.AvatarUrl,
             IsGroup = conversation.IsGroup,
             CreatedAt = conversation.CreatedAt,
             UnreadCount = 0
@@ -529,6 +625,16 @@ public class ConversationService : IConversationService
         CreatedAt = message.CreatedAt,
         DeliveredToUserIds = message.Receipts.Select(receipt => receipt.UserId).ToList(),
         ReplyToMessageId = message.ReplyToMessageId,
+        ReplyToMessage = message.ReplyToMessage is null ? null : new MessageSummaryDto
+        {
+            Id = message.ReplyToMessage.Id,
+            SenderId = message.ReplyToMessage.SenderId,
+            Content = message.ReplyToMessage.IsDeleted
+                ? "Tin nhắn đã được thu hồi"
+                : message.ReplyToMessage.Content,
+            Type = message.ReplyToMessage.Type,
+            CreatedAt = message.ReplyToMessage.CreatedAt
+        },
         Reactions = message.Reactions
             .GroupBy(reaction => reaction.Emoji)
             .ToDictionary(group => group.Key, group => group.Select(reaction => reaction.UserId).ToList()),

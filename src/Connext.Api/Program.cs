@@ -1,14 +1,16 @@
-using System.Text;
+using System.Net;
 using Connext.Api.Hubs;
 using Connext.Api.Services;
 using Connext.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+var knownProxies = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
 
 // ===== Database Context =====
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -17,45 +19,26 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // ===== JWT Authentication =====
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"]
-    ?? throw new InvalidOperationException("JWT SecretKey is not configured.");
 
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-.AddJwtBearer(options =>
-{
-    options.Events = new JwtBearerEvents
-    {
-        OnMessageReceived = context =>
-        {
-            var accessToken = context.Request.Query["access_token"];
-            if (!string.IsNullOrEmpty(accessToken) &&
-                context.HttpContext.Request.Path.StartsWithSegments("/hubs/chat"))
-                context.Token = accessToken;
-
-            return Task.CompletedTask;
-        }
-    };
-
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(secretKey)),
-        ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
-        ClockSkew = TimeSpan.Zero
-    };
-});
+.AddJwtBearer(options => JwtBearerSetup.Configure(options, jwtSettings));
 
 builder.Services.AddAuthorization();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    foreach (var address in knownProxies)
+    {
+        if (!IPAddress.TryParse(address, out var proxy))
+            throw new InvalidOperationException($"Forwarded proxy address '{address}' is invalid.");
+        options.KnownProxies.Add(proxy);
+    }
+});
+builder.Services.AddExceptionHandler<SafeProductionExceptionHandler>();
 builder.Services.AddSignalR();
 builder.Services.AddRateLimiter(options =>
 {
@@ -80,6 +63,8 @@ builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddSingleton<IConnectionTracker, ConnectionTracker>();
 builder.Services.AddSingleton<IFileStorage, MinioFileStorage>();
 builder.Services.AddScoped<IConversationFileService, ConversationFileService>();
+builder.Services.AddSingleton<CallSessionTracker>();
+builder.Services.AddHostedService<CallTimeoutService>();
 
 // ===== Controllers & Swagger =====
 builder.Services.AddControllers();
@@ -89,6 +74,7 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 // ===== HTTP Pipeline =====
+app.UseForwardedHeaders();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -96,6 +82,10 @@ if (app.Environment.IsDevelopment())
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "Connext API v1");
     });
+}
+else
+{
+    app.UseExceptionHandler();
 }
 
 app.UseCors("Frontend");

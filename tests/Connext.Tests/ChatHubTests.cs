@@ -3,9 +3,11 @@ using Connext.Api.Hubs;
 using Connext.Api.Services;
 using Connext.Data;
 using Connext.Data.Entities;
+using Connext.Shared.DTOs.Conversations;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Connext.Tests;
 
@@ -20,12 +22,15 @@ public class ChatHubTests
         var outsider = CreateUser();
         var conversationId = Guid.NewGuid();
         context.Users.AddRange(sender, recipient, outsider);
+        context.Friendships.Add(CreateFriendship(sender, recipient));
         context.Conversations.Add(new Conversation { Id = conversationId, CreatedById = sender.Id });
         context.ConversationMembers.AddRange(
             new ConversationMember { ConversationId = conversationId, UserId = sender.Id },
             new ConversationMember { ConversationId = conversationId, UserId = recipient.Id });
         await context.SaveChangesAsync();
-        var hub = CreateHub(context, sender.Id, out var clients);
+        var callSessions = new CallSessionTracker();
+        var hub = CreateHub(context, sender.Id, out var clients, callSessions);
+        Assert.True(callSessions.TryStart(conversationId, sender.Id, recipient.Id, DateTime.UtcNow));
 
         await Assert.ThrowsAsync<HubException>(() =>
             hub.SendSignal(conversationId, recipient.Id, "ReceiveMessage", new { content = "forged" }));
@@ -49,12 +54,14 @@ public class ChatHubTests
         var outsider = CreateUser();
         var conversationId = Guid.NewGuid();
         context.Users.AddRange(sender, recipient, outsider);
+        context.Friendships.Add(CreateFriendship(sender, recipient));
         context.Conversations.Add(new Conversation { Id = conversationId, CreatedById = sender.Id });
         context.ConversationMembers.AddRange(
             new ConversationMember { ConversationId = conversationId, UserId = sender.Id },
             new ConversationMember { ConversationId = conversationId, UserId = recipient.Id });
         await context.SaveChangesAsync();
-        var hub = CreateHub(context, sender.Id, out var clients);
+        var callSessions = new CallSessionTracker();
+        var hub = CreateHub(context, sender.Id, out var clients, callSessions);
 
         await Assert.ThrowsAsync<HubException>(() => hub.InviteCall(conversationId, outsider.Id));
         await Assert.ThrowsAsync<HubException>(() => hub.AnswerCall(conversationId, outsider.Id, true));
@@ -75,6 +82,79 @@ public class ChatHubTests
         Assert.Empty(clients.Messages);
     }
 
+    [Fact]
+    public async Task CallFlow_HandlesAnswerSignalsAndPersistsHistory()
+    {
+        using var context = CreateDbContext();
+        var caller = CreateUser();
+        var recipient = CreateUser();
+        var conversationId = Guid.NewGuid();
+        context.Users.AddRange(caller, recipient);
+        context.Friendships.Add(CreateFriendship(caller, recipient));
+        context.Conversations.Add(new Conversation { Id = conversationId, CreatedById = caller.Id });
+        context.ConversationMembers.AddRange(
+            new ConversationMember { ConversationId = conversationId, UserId = caller.Id },
+            new ConversationMember { ConversationId = conversationId, UserId = recipient.Id });
+        await context.SaveChangesAsync();
+
+        var callSessions = new CallSessionTracker();
+        var connections = new ConnectionTracker();
+        connections.Add(recipient.Id, "recipient-connection");
+        var callerHub = CreateHub(context, caller.Id, out var callerClients, callSessions, connections);
+        var recipientHub = CreateHub(context, recipient.Id, out var recipientClients, callSessions, connections);
+
+        await callerHub.InviteCall(conversationId, recipient.Id);
+        await recipientHub.AnswerCall(conversationId, caller.Id, accepted: true);
+        await callerHub.SendSignal(conversationId, recipient.Id, "offer", new { sdp = "offer" });
+        await recipientHub.SendSignal(conversationId, caller.Id, "answer", new { sdp = "answer" });
+        await callerHub.EndCall(conversationId, recipient.Id);
+
+        Assert.Contains(recipientClients.Messages, message => message.Method == "CallAnswered");
+        Assert.Contains(callerClients.Messages, message => message.Method == "CallIncoming");
+        var callHistory = await context.Messages.SingleAsync();
+        Assert.Equal(MessageType.Call, callHistory.Type);
+        Assert.StartsWith("Cuộc gọi đã kết thúc", callHistory.Content);
+    }
+
+    [Fact]
+    public async Task GetIceServers_RequiresMembershipAndReturnsConfiguredServers()
+    {
+        using var context = CreateDbContext();
+        var member = CreateUser();
+        var outsider = CreateUser();
+        var stranger = CreateUser();
+        var conversationId = Guid.NewGuid();
+        context.Users.AddRange(member, outsider, stranger);
+        context.Friendships.Add(CreateFriendship(member, outsider));
+        context.Conversations.Add(new Conversation { Id = conversationId, CreatedById = member.Id });
+        context.ConversationMembers.Add(new ConversationMember
+        {
+            ConversationId = conversationId,
+            UserId = member.Id
+        });
+        context.ConversationMembers.Add(new ConversationMember
+        {
+            ConversationId = conversationId,
+            UserId = outsider.Id
+        });
+        await context.SaveChangesAsync();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["WebRtc:IceServers:0:Urls:0"] = "stun:stun.example.test:3478",
+            ["WebRtc:IceServers:1:Urls:0"] = "turn:turn.example.test:3478",
+            ["WebRtc:IceServers:1:Username"] = "turn-user",
+            ["WebRtc:IceServers:1:Credential"] = "turn-password"
+        }).Build();
+        var hub = CreateHub(context, member.Id, out _, configuration: config);
+        var outsiderHub = CreateHub(context, stranger.Id, out _);
+
+        var servers = await hub.GetIceServers(conversationId);
+
+        Assert.Equal(2, servers.Count);
+        Assert.Equal("turn:turn.example.test:3478", servers[1].Urls[0]);
+        await Assert.ThrowsAsync<HubException>(() => outsiderHub.GetIceServers(conversationId));
+    }
+
     private static AppDbContext CreateDbContext() =>
         new(new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -88,11 +168,38 @@ public class ChatHubTests
         PasswordHash = "test-hash"
     };
 
-    private static ChatHub CreateHub(AppDbContext context, Guid userId, out TestHubClients clients)
+    private static Friendship CreateFriendship(User first, User second)
+    {
+        var firstIsLow = string.CompareOrdinal(first.Id.ToString("N"), second.Id.ToString("N")) < 0;
+        return new Friendship
+        {
+            Id = Guid.NewGuid(),
+            RequesterId = first.Id,
+            AddresseeId = second.Id,
+            PairUserLowId = firstIsLow ? first.Id : second.Id,
+            PairUserHighId = firstIsLow ? second.Id : first.Id,
+            Requester = first,
+            Addressee = second,
+            Status = FriendshipStatus.Accepted
+        };
+    }
+
+    private static ChatHub CreateHub(
+        AppDbContext context,
+        Guid userId,
+        out TestHubClients clients,
+        CallSessionTracker? callSessions = null,
+        IConnectionTracker? connectionTracker = null,
+        IConfiguration? configuration = null)
     {
         clients = new TestHubClients();
         var notifier = new TestChatNotifier();
-        return new ChatHub(context, new ConversationService(context, notifier), new ConnectionTracker())
+        return new ChatHub(
+            context,
+            new ConversationService(context, notifier),
+            connectionTracker ?? new ConnectionTracker(),
+            callSessions ?? new CallSessionTracker(),
+            configuration ?? new ConfigurationBuilder().Build())
         {
             Context = new TestHubCallerContext(userId),
             Clients = clients
@@ -161,6 +268,29 @@ public class ChatHubTests
             Task.CompletedTask;
 
         public Task ConversationRenamedAsync(Guid conversationId, string name) =>
+            Task.CompletedTask;
+
+        public Task ConversationMemberRoleChangedAsync(Guid conversationId, Guid memberId, string role) =>
+            Task.CompletedTask;
+
+        public Task GroupAvatarUpdatedAsync(Guid conversationId, string? avatarUrl) =>
+            Task.CompletedTask;
+
+        public Task MessageReactionAddedAsync(Guid conversationId, Guid messageId, Guid userId, string emoji) =>
+            Task.CompletedTask;
+
+        public Task MessageReactionRemovedAsync(Guid conversationId, Guid messageId, Guid userId, string emoji) =>
+            Task.CompletedTask;
+
+        public Task MessagePinnedAsync(Guid conversationId, Guid messageId, Guid userId) =>
+            Task.CompletedTask;
+
+        public Task MessageUnpinnedAsync(Guid conversationId, Guid messageId, Guid userId) =>
+            Task.CompletedTask;
+
+        public Task CallHistoryRecordedAsync(
+            Guid conversationId,
+            Connext.Shared.DTOs.Conversations.MessageResponseDto message) =>
             Task.CompletedTask;
     }
 }

@@ -10,12 +10,18 @@ public interface IConversationService
     Task MarkReadAsync(Guid userId, Guid conversationId);
     Task<bool> IsMemberAsync(Guid userId, Guid conversationId);
     Task<MessageResponseDto> SendMessageAsync(Guid userId, SendMessageDto request);
+    Task<MessageResponseDto> RecordCallHistoryAsync(
+        Guid conversationId,
+        Guid callerId,
+        string result,
+        TimeSpan? duration);
     Task<Guid> RecordDeliveredAsync(Guid userId, Guid messageId);
     Task<ConversationSummaryDto> CreateDirectAsync(Guid userId, Guid friendId);
     Task AddMemberAsync(Guid userId, Guid conversationId, Guid memberId);
     Task RemoveMemberAsync(Guid userId, Guid conversationId, Guid memberId);
     Task LeaveGroupAsync(Guid userId, Guid conversationId);
     Task RenameGroupAsync(Guid userId, Guid conversationId, string name);
+    Task SetGroupAvatarAsync(Guid userId, Guid conversationId, string? avatarUrl);
     Task ChangeMemberRoleAsync(Guid userId, Guid conversationId, Guid memberId, string role);
     Task RecallMessageAsync(Guid userId, Guid conversationId, Guid messageId);
     Task AddReactionAsync(Guid userId, Guid conversationId, Guid messageId, string emoji);
