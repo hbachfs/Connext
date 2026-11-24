@@ -36,7 +36,8 @@
 
 **Kết luận:** Toàn bộ luồng demo và checklist hồi quy trên máy chủ demo hoạt động ổn định trên Chrome, trình duyệt khác và giao diện điện thoại; không phát sinh lỗi nào cần mở Issue `bug`.
 
-### ✅ Báo cáo hoàn tất Issue #49: Kiểm thử tích hợp luồng demo và checklist hồi quy
+
+### Báo cáo hoàn tất Issue #49: Kiểm thử tích hợp luồng demo và checklist hồi quy
 
 Đã hoàn tất kiểm thử toàn bộ luồng demo và checklist hồi quy trên máy chủ demo (trên Chrome, trình duyệt khác và giao diện điện thoại), tài liệu đã được lưu tại `tests/E2E_Demo_And_Regression_Report.md` trên nhánh `qa/qa1-business-ui-testing`.
 
