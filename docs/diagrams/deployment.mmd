@@ -1,0 +1,20 @@
+flowchart TB
+  subgraph Client[Trình duyệt]
+    Web[HTML, CSS, JavaScript]
+  end
+  subgraph Azure[Azure VPS - Docker Compose]
+    Nginx[Nginx: HTTPS, reverse proxy]
+    WebC[Connext.Web container]
+    Api[Connext.Api: Web API + SignalR]
+    Sql[(SQL Server)]
+    Redis[(Redis)]
+    Minio[(MinIO: file và ảnh)]
+  end
+  GH[GitHub Actions: CI và deploy theo tag v*]
+  Web -- HTTPS, WSS --> Nginx
+  Nginx -- / --> WebC
+  Nginx -- /api, /hubs --> Api
+  Api --> Sql
+  Api -. chưa sử dụng .-> Redis
+  Api --> Minio
+  GH -- SSH deploy --> Azure

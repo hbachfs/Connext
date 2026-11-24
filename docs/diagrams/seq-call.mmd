@@ -1,0 +1,29 @@
+sequenceDiagram
+  actor A as Người gọi A
+  actor B as Người nhận B
+  participant H as ChatHub (SignalR)
+  A->>H: GetIceServers
+  A->>H: InviteCall(conversationId, B)
+  H-->>B: CallIncoming
+  alt B nhận
+    B->>H: AnswerCall(accepted = true)
+    H-->>A: CallAnswered
+    A->>H: SendSignal(offer)
+    H-->>B: offer
+    B->>H: SendSignal(answer)
+    H-->>A: answer
+    A->>H: SendIceCandidate
+    H-->>B: IceCandidate
+    Note over A,B: Luồng âm thanh/video đi trực tiếp (WebRTC)
+    A->>H: EndCall
+    H-->>B: CallEnded
+  else B từ chối
+    B->>H: AnswerCall(accepted = false)
+    H-->>A: CallAnswered (accepted = false)
+  else B đang trong cuộc gọi khác
+    H-->>A: CallBusy
+  else Không trả lời sau 30 giây
+    H-->>A: CallNoAnswer
+    H-->>B: CallNoAnswer
+  end
+  Note over H: Mọi hàm gọi kiểm tra cả hai là thành viên hội thoại và không chặn nhau

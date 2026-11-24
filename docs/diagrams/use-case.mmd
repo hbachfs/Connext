@@ -1,0 +1,43 @@
+flowchart LR
+  Guest([Khách])
+  User([Người dùng])
+  Admin([Quản trị viên nhóm])
+  subgraph Tai_khoan[Tài khoản]
+    UC1(Đăng ký / Đăng nhập FR-01)
+    UC2(Quên mật khẩu bằng OTP FR-01)
+    UC3(Quản lý hồ sơ FR-02)
+  end
+  subgraph Danh_ba[Danh bạ]
+    UC4(Tìm người dùng FR-03)
+    UC5(Kết bạn, hủy kết bạn, chặn FR-04)
+  end
+  subgraph Chat[Nhắn tin]
+    UC6(Chat 1-1 FR-05)
+    UC7(Chat nhóm, @mention FR-06)
+    UC8(Reply, reaction, thu hồi FR-07)
+    UC9(Gửi file và ảnh HD FR-08)
+    UC10(Kho Ảnh/File/Link FR-09)
+    UC11(Gọi thoại/video 1-1 FR-10)
+    UC12(Ghim tin nhắn FR-11)
+    UC13(Bình chọn FR-12, dự kiến)
+    UC14(Giao việc FR-13, dự kiến)
+  end
+  subgraph Quan_ly_nhom[Quản lý nhóm]
+    UC15(Thêm, xóa thành viên, đổi tên, đổi quyền FR-06)
+  end
+  Guest --> UC1
+  Guest --> UC2
+  User --> UC3
+  User --> UC4
+  User --> UC5
+  User --> UC6
+  User --> UC7
+  User --> UC8
+  User --> UC9
+  User --> UC10
+  User --> UC11
+  User --> UC12
+  User --> UC13
+  User --> UC14
+  Admin --> UC15
+  Admin -. kế thừa .-> User
