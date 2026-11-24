@@ -156,8 +156,8 @@ Connext/
 ├── src/
 │   ├── Connext.Shared/    # DTO, Enum, Validation dùng chung
 │   ├── Connext.Api/       # ASP.NET Core Web API + SignalR Hubs
-│   ├── Connext.Web/       # ASP.NET Core MVC/Razor giao diện, wwwroot (JS, CSS)
 │   └── Connext.Data/      # EF Core, Migrations
+├── Connext.Web/       # Giao diện: HTML, CSS, JavaScript, Nginx (ở thư mục gốc, không nằm trong src/)
 ├── tests/             # Unit test, Postman Collection, Test Case
 ├── docker-compose.yml
 └── .github/workflows/ # CI/CD
@@ -173,7 +173,7 @@ Connext/
 
 ## Chạy dự án
 
-Yêu cầu: Git, Docker Desktop (hoặc Docker Engine + Compose v2), .NET SDK 8.
+Yêu cầu: Git, Docker Desktop (hoặc Docker Engine + Compose v2), .NET SDK 10.
 
 ### Cấu hình cục bộ
 
@@ -215,8 +215,6 @@ docker compose ps           # chờ các service ở trạng thái "healthy"
 
 Tắt hạ tầng: `docker compose down` (giữ dữ liệu) hoặc `docker compose down -v` (xóa cả dữ liệu).
 
-Khi `Connext.Api` và `Connext.Web` có Dockerfile, DevOps sẽ thêm chúng vào `docker-compose.yml`.
-
 ### Chạy trọn bộ hệ thống với Docker (Cập nhật mới)
 
 Khởi động tất cả các dịch vụ (SQL Server, Redis, MinIO, API, Web, Nginx) chỉ với 1 lệnh:
@@ -248,7 +246,7 @@ git checkout --force <tag_on_dinh>
 docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
-Workflow `.github/workflows/ci.yml` chạy trên mọi PR vào `develop` và `main`: build, test .NET 8 và kiểm tra `docker-compose.yml`. PR cần CI xanh trước khi merge.
+Workflow `.github/workflows/ci.yml` chạy trên mọi PR vào `develop` và `main`: build, test .NET 10 và kiểm tra `docker-compose.yml`. PR cần CI xanh trước khi merge.
 
 ## Lộ trình 4 tuần
 
@@ -261,7 +259,8 @@ Workflow `.github/workflows/ci.yml` chạy trên mọi PR vào `develop` và `ma
 
 ## Tài liệu
 
-- Đặc tả SRS: thư mục [`docs/`](docs/)
+- Đặc tả SRS: [`docs/SRS.md`](docs/SRS.md); tiêu chí nghiệm thu và quy tắc nghiệp vụ: [`docs/acceptance-criteria.md`](docs/acceptance-criteria.md)
+- Bản demo: https://connext-app.eastasia.cloudapp.azure.com
 - Thiết kế Figma: [Connext trên Figma](https://www.figma.com/design/j4eyVglgmtoZCfuh5eVrgx/Wed-chat?node-id=0-1&t=oh8jXfJQcKk50pXs-1) (dev dùng Dev Mode để xem kích thước, màu, font và export assets)
 - Bảng công việc: _(dán link GitHub Projects)_
 - Tài liệu API (Swagger): _(cập nhật khi có server)_
