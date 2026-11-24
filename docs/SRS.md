@@ -307,3 +307,54 @@ Cơ sở dữ liệu quan hệ trên SQL Server được thiết kế thông qua
 | **Giai đoạn 3<br>(Tuần 5 - Tuần 8)<br>Phát triển Core Chat**  | Hoàn thiện Nhắn tin thời gian thực SignalR, Chat Nhóm & Gửi File/Ảnh HD.  | • BE (2): Lập trình `ChatHub` SignalR, API Nhóm chat, tích hợp upload ảnh HD/File.<br>• FE (2): Nối `HubConnection` vào Blazor, hiển thị trạng thái Đã xem, Reply, Reaction và kho lưu trữ 3 ngăn.<br>• DevOps: Đưa bản chạy thử lên Staging Server.<br>• QA (2): Kiểm thử cuốn chiếu API và luồng chat thời gian thực. |
 | **Giai đoạn 4<br>(Tuần 9 - Tuần 11)<br>Tiện ích & Gọi Video** | Hoàn thiện Gọi Audio/Video WebRTC, Bình chọn (Poll) và Giao việc (To-do). | • BE & FE: Tích hợp Signaling WebRTC cho cuộc gọi 1-1, chia sẻ màn hình, hoàn thiện tính năng Ghim tin, Bình chọn và Giao việc.<br>• DevOps: Cấu hình SSL (HTTPS/WSS) để chạy WebRTC thực tế.<br>• QA (2): Kiểm thử toàn diện (System & Regression Test), săn lỗi.                                                          |
 | **Giai đoạn 5<br>(Tuần 12)<br>Đóng gói & Nghiệm thu**         | Ổn định hệ thống Production, hoàn thiện hồ sơ và tổng duyệt Demo.         | • QA (2): Chốt biên bản nghiệm thu chất lượng (UAT).<br>• DevOps & Dev: Tối ưu hiệu năng và khóa nhánh code Production.<br>• PM, BA & Toàn đội: Hoàn thiện cuốn báo cáo tổng kết và diễn tập kịch bản thuyết trình.                                                                                                         |
+---
+
+# PHỤ LỤC A. CẬP NHẬT SO VỚI HIỆN TRẠNG TRIỂN KHAI (24/11/2026)
+
+Phụ lục này bổ sung và đính chính bản SRS gốc mà không sửa nội dung các mục phía trên. Khi có mâu thuẫn, nội dung phụ lục là bản áp dụng. Các giá trị nghiệp vụ đã chốt nằm ở [`acceptance-criteria.md`](acceptance-criteria.md). Những mục ghi "chờ PM xác nhận" là đề xuất.
+
+## A.1. Công nghệ giao diện (chờ PM xác nhận)
+
+Giao diện thực tế là HTML, CSS và JavaScript thuần (thư mục `Connext.Web/`, phục vụ qua Nginx), gọi REST API và SignalR bằng JavaScript Client. Các nội dung "Blazor" ở mục 1, 2, 4 và 5 của bản gốc được hiểu là "giao diện web" tương ứng. Backend vẫn là ASP.NET Core Web API (.NET 10), SignalR, SQL Server, MinIO. Redis có trong Docker Compose nhưng API chưa sử dụng; kết nối SignalR được lưu trong bộ nhớ.
+
+## A.2. Đặc tả bổ sung Use Case FR-10 đến FR-13
+
+**FR-10: Gọi thoại/video 1-1**
+- **Luồng chính:** Người gọi bấm biểu tượng gọi trong hội thoại 1-1 -> hệ thống gửi `CallIncoming` cho bên nhận -> bên nhận chấp nhận -> hai bên trao đổi `offer`, `answer` và ICE candidate qua SignalR -> luồng âm thanh/video đi trực tiếp (WebRTC) -> một bên kết thúc, hệ thống ghi lịch sử cuộc gọi vào hội thoại.
+- **Luồng lỗi:** Bên nhận từ chối -> người gọi nhận thông báo từ chối. Đang trong cuộc gọi khác -> báo máy bận. Không trả lời sau 30 giây -> cuộc gọi nhỡ. Người bị chặn hoặc không thuộc hội thoại -> không gọi được.
+- **AC:** Chạy qua HTTPS/WSS; bật/tắt mic, camera; chia sẻ màn hình. Mức tối thiểu: gọi thoại (audio).
+
+**FR-11: Ghim tin nhắn**
+- **Luồng chính:** Thành viên chọn tin -> bấm "Ghim" -> tin hiển thị ở đầu khung chat -> thành viên khác thấy ngay.
+- **Luồng lỗi:** Quá giới hạn ghim -> báo lỗi. Người không thuộc hội thoại -> bị từ chối.
+- **AC:** Tối đa 5 tin ghim mỗi hội thoại; bỏ ghim được.
+
+**FR-12: Bình chọn (Poll)**
+- **Luồng chính:** Thành viên nhóm bấm "Tạo bình chọn" -> nhập câu hỏi và 2 đến 10 lựa chọn -> bình chọn hiển thị trong hội thoại -> mỗi người chọn một phương án -> kết quả cập nhật ngay cho cả nhóm.
+- **Luồng lỗi:** Ít hơn 2 lựa chọn hoặc câu hỏi quá 200 ký tự -> không tạo được. Người ngoài nhóm -> không xem, không bỏ phiếu.
+- **AC:** Mỗi người một phiếu, được đổi lựa chọn; hiển thị số phiếu và phần trăm.
+
+**FR-13: Giao việc (To-do)**
+- **Luồng chính:** Thành viên nhóm bấm "Giao việc" -> nhập tiêu đề, chọn người nhận và hạn -> người nhận thấy việc ngay -> đánh dấu hoàn thành -> trạng thái cập nhật cho cả nhóm.
+- **Luồng lỗi:** Người nhận không thuộc nhóm -> từ chối. Tiêu đề rỗng hoặc quá 200 ký tự -> không tạo được.
+- **AC:** Danh sách lọc theo Chưa xong và Đã xong; việc quá hạn có cảnh báo.
+
+## A.3. Bảng truy vết theo API và Hub thực tế (thay cho mục 3.6)
+
+Đường dẫn thực tế không có tiền tố `/v1`. Chi tiết tham số và mã lỗi xem `docs/api.md` (#72).
+
+| Mã | API REST | Hàm / sự kiện SignalR (`/hubs/chat`) |
+|---|---|---|
+| FR-01 | `POST /api/auth/register`, `/login`, `/logout`, `/forgot-password`, `/verify-otp`, `/reset-password` | không |
+| FR-02 | `GET`, `PUT /api/users/me`; `PUT /api/users/me/password` | `OnlineChanged` |
+| FR-03 | `GET /api/contacts/search` | không |
+| FR-04 | `POST /api/contacts/request`, `/respond`; `GET /api/contacts/requests`, `/friends`; `DELETE /api/contacts/friends/{id}`; `POST`, `DELETE /api/contacts/blocks/{id}` | `ConversationCreated` |
+| FR-05 | `POST /api/conversations/direct/{friendId}`; `GET /api/conversations/{id}/messages`; `POST /api/conversations/{id}/read` | `SendMessage`, `JoinConversation`, `Typing`, `AcknowledgeDelivered` / `ReceiveMessage`, `MessageDelivered`, `Typing` |
+| FR-06 | `POST /api/conversations/groups`; `POST`, `DELETE /api/conversations/{id}/members`; `POST /{id}/leave`; `PUT /{id}`, `/avatar`, `/members/{id}/role` | `MessageMentioned`, `ConversationMemberAdded`, `ConversationMemberRemoved`, `ConversationMemberRoleChanged`, `ConversationRenamed`, `GroupAvatarUpdated` |
+| FR-07 | `POST`, `DELETE /api/conversations/{id}/messages/{messageId}/reactions`; `DELETE /api/conversations/{id}/messages/{messageId}` | `ReactionAdded`, `ReactionRemoved`, `MessageRecalled` |
+| FR-08 | `POST /api/conversations/{id}/files` | `ReceiveMessage` |
+| FR-09 | `GET /api/conversations/{id}/media`; `GET /api/conversations/{id}/files/{fileId}` | không |
+| FR-10 | không | `GetIceServers`, `InviteCall`, `AnswerCall`, `SendSignal`, `SendIceCandidate`, `EndCall` / `CallIncoming`, `CallAnswered`, `CallBusy`, `CallNoAnswer`, `CallEnded`, `IceCandidate` |
+| FR-11 | `POST`, `DELETE /api/conversations/{id}/messages/{messageId}/pin`; `GET /api/conversations/{id}/pins` | `MessagePinned`, `MessageUnpinned` |
+| FR-12 | chưa có (#78) | chưa có |
+| FR-13 | chưa có (#79) | chưa có |
