@@ -1,6 +1,7 @@
 using Connext.Api.Services;
 using Connext.Shared.DTOs.Auth;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Connext.Api.Controllers;
 
@@ -16,6 +17,7 @@ public class PasswordResetController : ControllerBase
     }
 
     [HttpPost("forgot-password")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
     {
         await _passwordResetService.RequestOtpAsync(request.Email);
@@ -23,6 +25,7 @@ public class PasswordResetController : ControllerBase
     }
 
     [HttpPost("verify-otp")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequestDto request)
     {
         var token = await _passwordResetService.VerifyOtpAsync(request.Email, request.Code);

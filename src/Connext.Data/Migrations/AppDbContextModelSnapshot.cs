@@ -28,6 +28,10 @@ namespace Connext.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AvatarUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -63,6 +67,9 @@ namespace Connext.Data.Migrations
 
                     b.Property<DateTime?>("LastReadAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
 
                     b.HasKey("ConversationId", "UserId");
 
@@ -177,6 +184,24 @@ namespace Connext.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("EditedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("PinnedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReplyToMessageId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("SenderId")
                         .HasColumnType("uniqueidentifier");
 
@@ -185,11 +210,50 @@ namespace Connext.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ReplyToMessageId");
+
                     b.HasIndex("SenderId");
 
                     b.HasIndex("ConversationId", "CreatedAt");
 
                     b.ToTable("Messages");
+                });
+
+            modelBuilder.Entity("Connext.Data.Entities.MessageMention", b =>
+                {
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("MessageId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("MessageMentions");
+                });
+
+            modelBuilder.Entity("Connext.Data.Entities.MessageReaction", b =>
+                {
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Emoji")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("MessageId", "UserId", "Emoji");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("MessageReactions");
                 });
 
             modelBuilder.Entity("Connext.Data.Entities.MessageReceipt", b =>
@@ -410,6 +474,11 @@ namespace Connext.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Connext.Data.Entities.Message", "ReplyToMessage")
+                        .WithMany()
+                        .HasForeignKey("ReplyToMessageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Connext.Data.Entities.User", "Sender")
                         .WithMany()
                         .HasForeignKey("SenderId")
@@ -418,7 +487,47 @@ namespace Connext.Data.Migrations
 
                     b.Navigation("Conversation");
 
+                    b.Navigation("ReplyToMessage");
+
                     b.Navigation("Sender");
+                });
+
+            modelBuilder.Entity("Connext.Data.Entities.MessageMention", b =>
+                {
+                    b.HasOne("Connext.Data.Entities.Message", "Message")
+                        .WithMany("Mentions")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Connext.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Connext.Data.Entities.MessageReaction", b =>
+                {
+                    b.HasOne("Connext.Data.Entities.Message", "Message")
+                        .WithMany("Reactions")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Connext.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Connext.Data.Entities.MessageReceipt", b =>
@@ -490,6 +599,10 @@ namespace Connext.Data.Migrations
 
             modelBuilder.Entity("Connext.Data.Entities.Message", b =>
                 {
+                    b.Navigation("Mentions");
+
+                    b.Navigation("Reactions");
+
                     b.Navigation("Receipts");
                 });
 #pragma warning restore 612, 618

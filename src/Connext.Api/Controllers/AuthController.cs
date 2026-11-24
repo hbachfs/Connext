@@ -3,6 +3,7 @@ using Connext.Shared.DTOs.Auth;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Connext.Api.Controllers;
 
@@ -11,10 +12,12 @@ namespace Connext.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly LoginAttemptTracker _loginAttemptTracker;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, LoginAttemptTracker loginAttemptTracker)
     {
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+        _loginAttemptTracker = loginAttemptTracker ?? throw new ArgumentNullException(nameof(loginAttemptTracker));
     }
 
     /// <summary>
@@ -43,6 +46,7 @@ public class AuthController : ControllerBase
     /// Đăng nhập bằng số điện thoại và mật khẩu.
     /// </summary>
     [HttpPost("login")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
         if (!ModelState.IsValid)
@@ -50,13 +54,19 @@ public class AuthController : ControllerBase
             return BadRequest(ModelState);
         }
 
+        if (_loginAttemptTracker.IsLimited(request.PhoneNumber, DateTime.UtcNow))
+            return StatusCode(StatusCodes.Status429TooManyRequests,
+                new { message = "Quá nhiều lần đăng nhập không thành công. Vui lòng thử lại sau." });
+
         var result = await _authService.LoginAsync(request);
 
         if (result is null)
         {
+            _loginAttemptTracker.RecordFailure(request.PhoneNumber, DateTime.UtcNow);
             return Unauthorized(new { message = "Số điện thoại hoặc mật khẩu không chính xác." });
         }
 
+        _loginAttemptTracker.Reset(request.PhoneNumber);
         return Ok(result);
     }
 

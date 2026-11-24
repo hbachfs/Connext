@@ -33,10 +33,19 @@ public class ConversationFileServiceTests
                 CancellationToken.None));
 
         var uploaded = await service.UploadAsync(memberId, conversationId, validPng, CancellationToken.None);
+        var pathTraversalUpload = await service.UploadAsync(
+            memberId,
+            conversationId,
+            CreateFormFile(
+                [137, 80, 78, 71, 13, 10, 26, 10, 0],
+                "../private/photo.png",
+                "image/png"),
+            CancellationToken.None);
 
         Assert.Equal("Image", uploaded.Kind);
         Assert.Equal("image/png", storage.ContentType);
-        Assert.Single(await context.MediaAssets.ToListAsync());
+        Assert.Equal(2, await context.MediaAssets.CountAsync());
+        Assert.Equal("photo.png", pathTraversalUpload.FileName);
         Assert.NotEqual("text/html", storage.ContentType);
     }
 

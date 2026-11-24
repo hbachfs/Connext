@@ -42,7 +42,7 @@ public class AuthControllerTests
                 DisplayName = req.DisplayName
             })
         };
-        var controller = new AuthController(mockService);
+        var controller = CreateController(mockService);
         var request = new RegisterRequestDto
         {
             PhoneNumber = "0901234567",
@@ -68,7 +68,7 @@ public class AuthControllerTests
         {
             RegisterFunc = _ => throw new InvalidOperationException("Số điện thoại đã được đăng ký.")
         };
-        var controller = new AuthController(mockService);
+        var controller = CreateController(mockService);
         var request = new RegisterRequestDto
         {
             PhoneNumber = "0901234567",
@@ -98,7 +98,7 @@ public class AuthControllerTests
                 DisplayName = "User"
             })
         };
-        var controller = new AuthController(mockService);
+        var controller = CreateController(mockService);
         var request = new LoginRequestDto
         {
             PhoneNumber = "0901234567",
@@ -123,7 +123,7 @@ public class AuthControllerTests
         {
             LoginFunc = _ => Task.FromResult<AuthResponseDto?>(null)
         };
-        var controller = new AuthController(mockService);
+        var controller = CreateController(mockService);
         var request = new LoginRequestDto
         {
             PhoneNumber = "0901234567",
@@ -137,4 +137,78 @@ public class AuthControllerTests
         var unauthorizedResult = Assert.IsType<UnauthorizedObjectResult>(result);
         Assert.Equal(401, unauthorizedResult.StatusCode);
     }
+
+    [Fact]
+    public async Task Login_LimitsFailedAttemptsByNormalizedPhoneNumber()
+    {
+        var mockService = new MockAuthService
+        {
+            LoginFunc = _ => Task.FromResult<AuthResponseDto?>(null)
+        };
+        var controller = CreateController(mockService);
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var result = await controller.Login(new LoginRequestDto
+            {
+                PhoneNumber = "0901234567",
+                Password = "WrongPassword!"
+            });
+            Assert.IsType<UnauthorizedObjectResult>(result);
+        }
+
+        var limitedResult = await controller.Login(new LoginRequestDto
+        {
+            PhoneNumber = "+84901234567",
+            Password = "WrongPassword!"
+        });
+
+        var tooManyRequests = Assert.IsType<ObjectResult>(limitedResult);
+        Assert.Equal(429, tooManyRequests.StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_ClearsFailedAttemptsAfterSuccessfulAuthentication()
+    {
+        var successfulResponse = new AuthResponseDto
+        {
+            Token = "valid-token",
+            UserId = Guid.NewGuid(),
+            PhoneNumber = "+84901234567",
+            DisplayName = "User"
+        };
+        var mockService = new MockAuthService
+        {
+            LoginFunc = request => Task.FromResult<AuthResponseDto?>(
+                request.Password == "CorrectPassword!" ? successfulResponse : null)
+        };
+        var controller = CreateController(mockService);
+
+        for (var attempt = 0; attempt < 4; attempt++)
+            await controller.Login(new LoginRequestDto
+            {
+                PhoneNumber = "0901234567",
+                Password = "WrongPassword!"
+            });
+
+        Assert.IsType<OkObjectResult>(await controller.Login(new LoginRequestDto
+        {
+            PhoneNumber = "+84901234567",
+            Password = "CorrectPassword!"
+        }));
+        for (var attempt = 0; attempt < 5; attempt++)
+            Assert.IsType<UnauthorizedObjectResult>(await controller.Login(new LoginRequestDto
+            {
+                PhoneNumber = "0901234567",
+                Password = "WrongPassword!"
+            }));
+        Assert.Equal(429, Assert.IsType<ObjectResult>(await controller.Login(new LoginRequestDto
+        {
+            PhoneNumber = "0901234567",
+            Password = "WrongPassword!"
+        })).StatusCode);
+    }
+
+    private static AuthController CreateController(MockAuthService service) =>
+        new(service, new LoginAttemptTracker());
 }

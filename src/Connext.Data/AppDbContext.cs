@@ -19,6 +19,8 @@ public class AppDbContext : DbContext
     public DbSet<PasswordResetOtp> PasswordResetOtps => Set<PasswordResetOtp>();
     public DbSet<PasswordResetGrant> PasswordResetGrants => Set<PasswordResetGrant>();
     public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
+    public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
+    public DbSet<MessageMention> MessageMentions => Set<MessageMention>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -67,6 +69,7 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(conversation => conversation.Id);
             entity.Property(conversation => conversation.Name).HasMaxLength(100);
+            entity.Property(conversation => conversation.AvatarUrl).HasMaxLength(500);
             entity.HasOne(conversation => conversation.CreatedBy).WithMany().HasForeignKey(conversation => conversation.CreatedById)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(conversation => conversation.CreatedAt);
@@ -91,6 +94,27 @@ public class AppDbContext : DbContext
             entity.HasOne(message => message.Sender).WithMany().HasForeignKey(message => message.SenderId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(message => new { message.ConversationId, message.CreatedAt });
+            entity.HasOne(message => message.ReplyToMessage).WithMany()
+                .HasForeignKey(message => message.ReplyToMessageId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<MessageReaction>(entity =>
+        {
+            entity.HasKey(reaction => new { reaction.MessageId, reaction.UserId, reaction.Emoji });
+            entity.Property(reaction => reaction.Emoji).HasMaxLength(32).IsRequired();
+            entity.HasOne(reaction => reaction.Message).WithMany(message => message.Reactions)
+                .HasForeignKey(reaction => reaction.MessageId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(reaction => reaction.User).WithMany()
+                .HasForeignKey(reaction => reaction.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<MessageMention>(entity =>
+        {
+            entity.HasKey(mention => new { mention.MessageId, mention.UserId });
+            entity.HasOne(mention => mention.Message).WithMany(message => message.Mentions)
+                .HasForeignKey(mention => mention.MessageId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(mention => mention.User).WithMany()
+                .HasForeignKey(mention => mention.UserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<MessageReceipt>(entity =>
