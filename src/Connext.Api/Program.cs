@@ -112,5 +112,6 @@ app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
+app.MapGet("/api/health", () => Results.Ok(new { status = "healthy" }));
 
 app.Run();
