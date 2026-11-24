@@ -1,0 +1,111 @@
+erDiagram
+  USERS ||--o{ FRIENDSHIPS : "gửi/nhận lời mời"
+  USERS ||--o{ USER_BLOCKS : "chặn"
+  USERS ||--o{ CONVERSATION_MEMBERS : "tham gia"
+  USERS ||--o{ MESSAGES : "gửi"
+  USERS ||--o{ PASSWORD_RESET_OTPS : "yêu cầu"
+  USERS ||--o{ PASSWORD_RESET_GRANTS : "được cấp"
+  USERS ||--o{ MEDIA_ASSETS : "tải lên"
+  CONVERSATIONS ||--o{ CONVERSATION_MEMBERS : "có"
+  CONVERSATIONS ||--o{ MESSAGES : "chứa"
+  CONVERSATIONS ||--o{ MEDIA_ASSETS : "chứa"
+  MESSAGES ||--o{ MESSAGE_RECEIPTS : "đã nhận"
+  MESSAGES ||--o{ MESSAGE_REACTIONS : "có"
+  MESSAGES ||--o{ MESSAGE_MENTIONS : "nhắc tới"
+  MESSAGES o|--o{ MESSAGES : "trả lời"
+  USERS ||--o{ MESSAGE_RECEIPTS : "nhận"
+  USERS ||--o{ MESSAGE_REACTIONS : "thả"
+  USERS ||--o{ MESSAGE_MENTIONS : "được nhắc"
+  USERS {
+    guid Id PK
+    string PhoneNumber
+    string Email
+    string PasswordHash
+    string DisplayName
+    string AvatarUrl
+    bool IsOnline
+    datetime LastSeen
+    datetime CreatedAt
+  }
+  FRIENDSHIPS {
+    guid Id PK
+    guid RequesterId FK
+    guid AddresseeId FK
+    guid PairUserLowId
+    guid PairUserHighId
+    enum Status "Pending, Accepted, Declined"
+    datetime CreatedAt
+    datetime UpdatedAt
+  }
+  USER_BLOCKS {
+    guid BlockerId PK
+    guid BlockedUserId PK
+    datetime CreatedAt
+  }
+  CONVERSATIONS {
+    guid Id PK
+    string Name
+    string AvatarUrl
+    bool IsGroup
+    guid CreatedById FK
+    datetime CreatedAt
+  }
+  CONVERSATION_MEMBERS {
+    guid ConversationId PK
+    guid UserId PK
+    enum Role "Member, Admin"
+    datetime JoinedAt
+    datetime LastReadAt
+  }
+  MESSAGES {
+    guid Id PK
+    guid ConversationId FK
+    guid SenderId FK
+    string Content
+    enum Type "Text, Image, File, Call"
+    guid ReplyToMessageId FK
+    bool IsPinned
+    datetime PinnedAt
+    bool IsDeleted
+    datetime CreatedAt
+  }
+  MESSAGE_RECEIPTS {
+    guid MessageId PK
+    guid UserId PK
+    datetime DeliveredAt
+  }
+  MESSAGE_REACTIONS {
+    guid MessageId PK
+    guid UserId PK
+    string Emoji
+    datetime CreatedAt
+  }
+  MESSAGE_MENTIONS {
+    guid MessageId PK
+    guid UserId PK
+  }
+  MEDIA_ASSETS {
+    guid Id PK
+    guid ConversationId FK
+    guid UploadedById FK
+    string ObjectKey
+    string FileName
+    string ContentType
+    enum Kind
+    long Size
+    datetime CreatedAt
+  }
+  PASSWORD_RESET_OTPS {
+    guid Id PK
+    guid UserId FK
+    string CodeHash
+    datetime ExpiresAt
+    datetime ConsumedAt
+    int FailedAttempts
+  }
+  PASSWORD_RESET_GRANTS {
+    string TokenId PK
+    guid UserId FK
+    datetime ExpiresAt
+    datetime ConsumedAt
+  }

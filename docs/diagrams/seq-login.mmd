@@ -1,0 +1,19 @@
+sequenceDiagram
+  actor U as Người dùng
+  participant W as Giao diện (Web)
+  participant A as API (AuthController)
+  participant D as SQL Server
+  U->>W: Nhập SĐT/email và mật khẩu
+  W->>A: POST /api/auth/login
+  A->>A: Giới hạn đăng nhập sai (LoginAttemptTracker)
+  A->>D: Tìm người dùng, kiểm tra mật khẩu băm
+  alt Đúng thông tin
+    A-->>W: 200 + JWT
+    W->>W: Lưu JWT trong trình duyệt
+    W->>A: Kết nối SignalR /hubs/chat?access_token=JWT
+    A-->>W: Kết nối thành công, vào các nhóm hội thoại
+  else Sai thông tin
+    A-->>W: 401 "Thông tin không chính xác"
+  else Sai quá 5 lần trong 1 phút
+    A-->>W: 429
+  end

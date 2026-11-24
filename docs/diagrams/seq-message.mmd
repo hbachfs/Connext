@@ -1,0 +1,21 @@
+sequenceDiagram
+  actor A as Người dùng A
+  participant HA as Trình duyệt A
+  participant H as ChatHub (SignalR)
+  participant S as ConversationService
+  participant D as SQL Server
+  participant HB as Trình duyệt B
+  actor B as Người dùng B
+  A->>HA: Gõ tin nhắn, Enter
+  HA->>H: SendMessage(conversationId, nội dung)
+  H->>S: SendMessageAsync (kiểm tra thành viên, chặn, độ dài)
+  S->>D: Lưu Message
+  H-->>HA: ReceiveMessage (Đã gửi)
+  H-->>HB: ReceiveMessage
+  HB->>H: AcknowledgeDelivered(messageId)
+  H->>S: RecordDeliveredAsync
+  S->>D: Lưu MessageReceipt
+  H-->>HA: MessageDelivered (Đã nhận)
+  B->>HB: Mở hội thoại
+  HB->>H: POST /api/conversations/{id}/read
+  Note over HA,HB: Typing: hàm Typing gửi sự kiện cho các thành viên khác

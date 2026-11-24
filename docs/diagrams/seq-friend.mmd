@@ -1,0 +1,16 @@
+sequenceDiagram
+  actor A as Người dùng A
+  actor B as Người dùng B
+  participant API as API (ContactsController)
+  participant D as SQL Server
+  participant H as ChatHub (SignalR)
+  A->>API: POST /api/contacts/request (SĐT của B)
+  API->>D: Tạo Friendship (Pending)
+  B->>API: GET /api/contacts/requests
+  API-->>B: Danh sách lời mời nhận được
+  B->>API: POST /api/contacts/respond (chấp nhận)
+  API->>D: Friendship = Accepted
+  API->>D: Tạo hội thoại 1-1 (CreateDirectAsync)
+  API->>H: Thông báo hội thoại mới
+  H-->>A: ConversationCreated
+  H-->>B: ConversationCreated
