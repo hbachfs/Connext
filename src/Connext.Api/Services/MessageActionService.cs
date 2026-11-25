@@ -1,4 +1,4 @@
-
+using Connext.Shared;
 using Connext.Data;
 using Connext.Data.Entities;
 using Connext.Shared.Chat;
@@ -18,8 +18,8 @@ public record MsgResult(MsgError Error, Guid ConversationId, IReadOnlyList<Guid>
 public class MessageActionService(AppDbContext db, TimeProvider clock)
 {
     // ===== Quy tắc BA: đổi ở đây =====
-    public static readonly TimeSpan RecallWindow = TimeSpan.FromMinutes(15);
-    public const int MaxPins = 3;
+    public static readonly TimeSpan RecallWindow = Limits.RecallWindow;   // 24 giờ
+    public const int MaxPins = Limits.MaxPinsPerConversation;             // 5
     public static readonly bool GroupPinAdminOnly = false;   // true = chỉ quản trị viên được ghim trong nhóm
     public static readonly string[] AllowedEmojis = ["👍", "❤️", "😂", "😮", "😢", "😡"];
 
@@ -43,9 +43,10 @@ public class MessageActionService(AppDbContext db, TimeProvider clock)
     private static MsgResult Ok(Ctx c) => new(MsgError.None, c.Msg.ConversationId, c.MemberIds);
 
     // ---------------- Reaction: thêm / đổi ----------------
-    public async Task<MsgResult> SetReactionAsync(Guid userId, long messageId, string emoji, CancellationToken ct = default)
+    public async Task<MsgResult> SetReactionAsync(Guid userId, long messageId, string reaction, CancellationToken ct = default)
     {
-        if (!AllowedEmojis.Contains(emoji)) return MsgResult.Fail(MsgError.InvalidEmoji);
+        var type = NormalizeReaction(reaction);
+        if (type is null) return MsgResult.Fail(MsgError.InvalidEmoji);
 
         var (ctx, err) = await LoadAsync(userId, messageId, ct);
         if (ctx is null) return MsgResult.Fail(err);
@@ -53,9 +54,9 @@ public class MessageActionService(AppDbContext db, TimeProvider clock)
 
         var existing = await db.MessageReactions.FirstOrDefaultAsync(r => r.MessageId == messageId && r.UserId == userId, ct);
         if (existing is null)
-            db.MessageReactions.Add(new MessageReaction { MessageId = messageId, UserId = userId, Emoji = emoji });
+            db.MessageReactions.Add(new MessageReaction { MessageId = messageId, UserId = userId, Emoji = type });
         else
-            existing.Emoji = emoji;   // đổi reaction
+            existing.Emoji = type;
 
         await db.SaveChangesAsync(ct);
         return Ok(ctx);
@@ -169,4 +170,8 @@ public class MessageActionService(AppDbContext db, TimeProvider clock)
             PinnedAt = p.PinnedAt
         }).ToList();
     }
+    // THÊM: chuẩn hóa tên loại reaction (không phân biệt hoa thường)
+    public static string? NormalizeReaction(string? value) =>
+        Limits.ReactionTypes.FirstOrDefault(r =>
+            string.Equals(r, value?.Trim(), StringComparison.OrdinalIgnoreCase));
 }

@@ -21,6 +21,7 @@ public class MessageDto
     public long? ReplyToMessageId { get; set; }
     public ReplyPreviewDto? ReplyTo { get; set; }   // nội dung tin gốc rút gọn
     public List<ReactionDto> Reactions { get; set; } = new List<ReactionDto>();
+    public PollDto? Poll { get; set; }
 }
 
 

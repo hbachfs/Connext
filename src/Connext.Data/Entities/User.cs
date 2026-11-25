@@ -35,4 +35,7 @@ public class User
     public ICollection<Friendship> SentFriendRequests { get; set; } = new List<Friendship>();
     public ICollection<Friendship> ReceivedFriendRequests { get; set; } = new List<Friendship>();
     public ICollection<ConversationMember> ConversationMembers { get; set; } = new List<ConversationMember>();
+
+    public int OtpFailedCount { get; set; }
+    public DateTime? OtpLockedUntil { get; set; }
 }

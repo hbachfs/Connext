@@ -2,6 +2,7 @@
 using Connext.Data;
 using Connext.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Connext.Shared;
 
 namespace Connext.Api.Services;
 
@@ -15,7 +16,7 @@ public static class GroupRules
 public enum GroupError
 {
     None, NotFound, NotMember, NotAdmin, InvalidTarget,
-    NotFriendOrBlocked, MinMembers, LastAdmin, Invalid
+    NotFriendOrBlocked, MinMembers, LastAdmin, Invalid, TooMany
 }
 
 // Notify = mọi user cần nhận event (kể cả người vừa bị xóa/rời)
@@ -61,6 +62,7 @@ public class GroupService(AppDbContext db) : IGroupService
         var existing = conv!.Members.Select(m => m.UserId).ToHashSet();
         var ids = userIds.Distinct().Where(id => !existing.Contains(id)).ToList();
         if (ids.Count == 0) return GroupResult.Fail(GroupError.Invalid);
+        if (conv.Members.Count + ids.Count > Limits.MaxGroupMembers) return GroupResult.Fail(GroupError.TooMany);
 
         // Phải là bạn của người thêm
         var friendIds = await db.Friendships.AsNoTracking()
@@ -110,17 +112,18 @@ public class GroupService(AppDbContext db) : IGroupService
     {
         var (conv, actor, err) = await LoadAsync(actorId, conversationId, ct);
         if (err != GroupError.None) return GroupResult.Fail(err);
-        // SỬA: cùng quy tắc với controller (còn lại phải >= 3)
-        if (conv!.Members.Count - 1 < GroupRules.MinMembers) return GroupResult.Fail(GroupError.MinMembers);
 
-        var notify = conv.Members.Select(m => m.UserId).ToList();
+        var notify = conv!.Members.Select(m => m.UserId).ToList();
 
-        // Admin cuối cùng rời: chuyển quyền cho người vào nhóm sớm nhất
-        if (actor!.Role == GroupRules.Admin && conv.Members.Count(m => m.Role == GroupRules.Admin) == 1)
+        if (conv.Members.Count - 1 < Limits.MinGroupMembers)   // SỬA: giải tán
         {
-            var heir = conv.Members.Where(m => m.UserId != actorId).OrderBy(m => m.JoinedAt).First();
-            heir.Role = GroupRules.Admin;
+            db.ConversationMembers.RemoveRange(conv.Members);
+            await db.SaveChangesAsync(ct);
+            return new GroupResult(GroupError.None, notify, notify);
         }
+
+        if (actor!.Role == GroupRules.Admin && conv.Members.Count(m => m.Role == GroupRules.Admin) == 1)
+            conv.Members.Where(m => m.UserId != actorId).OrderBy(m => m.JoinedAt).First().Role = GroupRules.Admin;
 
         db.ConversationMembers.Remove(actor);
         await db.SaveChangesAsync(ct);
@@ -172,4 +175,5 @@ public class GroupService(AppDbContext db) : IGroupService
         await db.SaveChangesAsync(ct);
         return Ok(conv, [], [targetId]);
     }
+   
 }

@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Security.Claims;
 using Connext.Api.Services;
+using Connext.Shared;
+using System.Text.RegularExpressions;
 
 namespace Connext.Api.Hubs;
 
@@ -17,13 +19,13 @@ namespace Connext.Api.Hubs;
 [Authorize]
 public class ChatHub : Hub
 {
-    private const int MaxContentLength = 4000;
+    //private const int MaxContentLength = Limits.MaxMessageLength;
     private const int MaxFileNameLength = 255;
     private const int TypingThrottleMs = 1500;
-    private const int MaxMentions = 50; // THÊM: giới hạn số người được @mention mỗi tin
+    //private const int MaxMentions = Limits.MaxGroupMembers; // THÊM: giới hạn số người được @mention mỗi tin
     private const string TypingKey = "typing-last-sent";
 
-    private enum MessageType { Text, Image, File }
+    private enum MessageType { Text, Image, File , Poll }
 
     
     // Lưu ý: chỉ đúng khi chạy 1 instance. Nhiều instance cần Redis backplane + lưu presence ngoài bộ nhớ.
@@ -35,6 +37,11 @@ public class ChatHub : Hub
     private readonly ILogger<ChatHub> _logger;
     private readonly CallManager _calls;
 
+
+    private const int MaxContentLength = Limits.MaxMessageLength;
+    private const int MaxMentions = Limits.MaxGroupMembers;
+    private static readonly Regex AllMention =
+        new(@"(?<!\S)@all(?!\w)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static bool IsUserOnline(Guid userId) => _userConnections.ContainsKey(userId);  
 
@@ -183,11 +190,12 @@ public class ChatHub : Hub
     List<Guid>? mentionedUserIds = null, long? replyToMessageId = null)
     {
         var userId = GetCurrentUserId();
-
         // ---- Kiểm tra dữ liệu đầu vào ----
         if (!TryParseType(type, out var kind))
             throw new HubException("Loại tin nhắn không hợp lệ.");
-        var typeValue = kind.ToString().ToLowerInvariant(); // lưu DB dạng "text" | "image" | "file"
+        if (kind == MessageType.Poll)                                   // THÊM
+            throw new HubException("Hãy tạo bình chọn qua API /polls.");
+        var typeValue = kind.ToString().ToLowerInvariant();
 
         content = content?.Trim();
         if (content is { Length: > MaxContentLength })
@@ -224,11 +232,18 @@ public class ChatHub : Hub
         }
 
         // @mention, chỉ nhận thành viên của nhóm, bỏ chính mình, bỏ trùng, tối đa MaxMentions
+        // @mention: @all = mọi thành viên; còn lại chỉ nhận thành viên nhóm, bỏ chính mình, bỏ trùng
         List<Guid> mentions = [];
-        if (isGroup && mentionedUserIds is { Count: > 0 })
+        if (isGroup)
         {
             var memberIdSet = members.Select(m => m.UserId).ToHashSet();
-            mentions = mentionedUserIds.Distinct()
+            var wantsAll = content is not null && AllMention.IsMatch(content);   // THÊM
+
+            IEnumerable<Guid> requested = wantsAll
+                ? memberIdSet
+                : mentionedUserIds ?? Enumerable.Empty<Guid>();
+
+            mentions = requested.Distinct()
                 .Where(id => id != userId && memberIdSet.Contains(id))
                 .Take(MaxMentions).ToList();
         }

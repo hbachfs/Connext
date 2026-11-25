@@ -1,7 +1,7 @@
 ﻿using Connext.Data.Entities;
 
 using Microsoft.EntityFrameworkCore;
-
+using Connext.Shared;
 namespace Connext.Data;
 
 public class AppDbContext : DbContext
@@ -21,6 +21,10 @@ public class AppDbContext : DbContext
 
     public DbSet<MessageReaction> MessageReactions { get; set; }
     public DbSet<MessagePin> MessagePins { get; set; }
+
+    public DbSet<Poll> Polls => Set<Poll>();
+    public DbSet<PollOption> PollOptions => Set<PollOption>();
+    public DbSet<PollVote> PollVotes => Set<PollVote>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -138,5 +142,25 @@ public class AppDbContext : DbContext
         builder.Entity<MessagePin>()
             .HasOne(p => p.PinnedBy).WithMany()
             .HasForeignKey(p => p.PinnedById).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<Poll>(e =>
+        {
+            e.Property(p => p.Question).HasMaxLength(Limits.PollQuestionMaxLength).IsRequired();
+            e.HasOne(p => p.Message).WithOne(m => m.Poll).HasForeignKey<Poll>(p => p.MessageId);
+            e.HasIndex(p => p.MessageId).IsUnique();
+        });
+        builder.Entity<PollOption>(e =>
+        {
+            e.Property(o => o.Text).HasMaxLength(Limits.PollOptionMaxLength).IsRequired();
+            e.HasOne(o => o.Poll).WithMany(p => p.Options).HasForeignKey(o => o.PollId);
+        });
+        builder.Entity<PollVote>(e =>
+        {
+            e.HasIndex(v => new { v.PollId, v.UserId }).IsUnique();   // mỗi người một phiếu
+            e.HasOne(v => v.Poll).WithMany(p => p.Votes).HasForeignKey(v => v.PollId);
+            // Restrict để tránh lỗi "multiple cascade paths" (Poll -> Options -> Votes và Poll -> Votes)
+            e.HasOne(v => v.Option).WithMany().HasForeignKey(v => v.OptionId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+
     }
 }

@@ -53,11 +53,15 @@ public class MessagesController : ControllerBase
         var messages = await query
             .Include(m => m.Mentions)          // lịch sử trả đủ người được @mention
             .Include(m => m.Reactions)         // reaction
-            .Include(m => m.ReplyToMessage)    // nội dung tin gốc khi trả lời
+            .Include(m => m.ReplyToMessage)// nội dung tin gốc khi trả lời
+            .Include(m => m.Poll).ThenInclude(p => p!.Options)
+            .Include(m => m.Poll).ThenInclude(p => p!.Votes)
             .AsSplitQuery()                    // tránh nổ số dòng khi Include nhiều collection
             .OrderByDescending(m => m.Id)
             .Take(pageSize + 1) // Lấy dư 1 để check hasMore
             .ToListAsync();
+
+        
 
         var hasMore = messages.Count > pageSize;
         if (hasMore) messages.RemoveAt(messages.Count - 1);
@@ -69,6 +73,7 @@ public class MessagesController : ControllerBase
         var dtos = messages.Select(m =>
         {
             var dto = MessageMapper.ToDto(m, m.SenderId == userId);
+            dto.Poll = m.Poll is null || m.IsRecalled ? null : PollMapper.ToDto(m.Poll, m.ConversationId, userId);
 
             // THÊM: tin gốc nằm trước mốc xóa lịch sử thì không lộ nội dung
             if (member.ClearedAt.HasValue && dto.ReplyTo != null &&

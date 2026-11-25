@@ -118,14 +118,16 @@ public class GroupServiceTests
     }
 
     [Fact]
-    public async Task Leave_Rejected_When_Group_Has_Min_Members()
+    public async Task Leave_Disbands_Group_When_It_Drops_Below_Min_Members()
     {
         var (db, svc) = Setup();
         var (cid, u) = await SeedGroupAsync(db, 3);
 
         var r = await svc.LeaveAsync(u[1], cid);
 
-        Assert.Equal(GroupError.MinMembers, r.Error);
+        Assert.True(r.Ok);
+        Assert.Equal(3, r.Notify.Count);   // mọi thành viên đều nhận sự kiện
+        Assert.Equal(0, await db.ConversationMembers.CountAsync(m => m.ConversationId == cid));
     }
 
     [Fact]

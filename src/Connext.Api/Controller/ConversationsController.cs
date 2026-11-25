@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using Connext.Data.Entities;
+using Connext.Shared;
 namespace Connext.Api.Controllers;
 
 [Authorize]
@@ -13,8 +14,8 @@ namespace Connext.Api.Controllers;
 [Route("api/conversations")]
 public class ConversationsController : ControllerBase
 {
-    private const int MinimumGroupMembers = 3;
-    private const int MaximumGroupMembers = 100;
+    private const int MinimumGroupMembers = Limits.MinGroupMembers;
+    private const int MaximumGroupMembers = Limits.MaxGroupMembers;
 
     private readonly AppDbContext _context;
     private readonly IHubContext<ChatHub>? _hub;
@@ -104,7 +105,7 @@ public class ConversationsController : ControllerBase
 
     private static string? Preview(string type, string? content) => type switch
     {
-        "image" => "[Hình ảnh]",
+        "poll" => "[Bình chọn]",
         "file" => "[Tệp đính kèm]",
         _ => content
     };
@@ -223,6 +224,9 @@ public class ConversationsController : ControllerBase
                 memberCount = memberIds.Count
             },
             "Tạo nhóm thành công."));
+
+     
+
     }
 
     // Danh sách thành viên (mọi thành viên đều xem được)
@@ -447,10 +451,20 @@ public class ConversationsController : ControllerBase
                 return BadRequest(ApiResponse<object>.Fail("Không thể xóa quản trị viên khác khỏi nhóm."));
         }
 
-        // Quy tắc 3 người: không để nhóm tụt xuống dưới mức tối thiểu
-        if (group.Members.Count - 1 < MinimumGroupMembers)
+        // Quy tắc 3 người: tự rời mà còn dưới 3 người thì GIẢI TÁN; admin xóa người thì vẫn bị chặn
+        var willDisband = group.Members.Count - 1 < MinimumGroupMembers;
+        if (willDisband && targetId != userId)
             return BadRequest(ApiResponse<object>.Fail(
-                $"Nhóm phải còn ít nhất {MinimumGroupMembers} thành viên. Hãy xóa hội thoại thay vì rời nhóm."));
+                $"Nhóm phải còn ít nhất {MinimumGroupMembers} thành viên."));
+
+        if (willDisband)   // giải tán = gỡ toàn bộ thành viên (không xóa tin để khỏi vướng khóa ngoại)
+        {
+            var allIds = group.Members.Select(m => m.UserId).ToList();
+            _context.ConversationMembers.RemoveRange(group.Members.ToList());
+            await _context.SaveChangesAsync();
+            await NotifyAsync(allIds, "ConversationDisbanded", id);
+            return Ok(ApiResponse<object>.Ok(null, "Nhóm đã giải tán vì còn dưới 3 thành viên."));
+        }
 
         _context.ConversationMembers.Remove(target);
 

@@ -14,7 +14,7 @@ public static class MessageMapper
         if (m.IsRecalled) return RecalledText;
         return m.Type switch
         {
-            "image" => "[Hình ảnh]",
+            "poll" => "[Bình chọn]",
             "file" => "[Tệp đính kèm]",
             _ => m.Content is { Length: > PreviewLength } c ? c[..PreviewLength] + "…" : m.Content
         };

@@ -34,4 +34,6 @@ public class Message
     public virtual ICollection<MessageReaction> Reactions { get; set; } = new List<MessageReaction>();
 
     public virtual ICollection<MessageMention> Mentions { get; set; } = new List<MessageMention>();
+
+    public virtual Poll? Poll { get; set; }
 }

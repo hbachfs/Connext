@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-
+using Connext.Shared;
 namespace Connext.Api.Controllers;
 
 [Authorize]
@@ -101,8 +101,29 @@ public class FriendsController : ControllerBase
 
         if (existing != null)
         {
-            if (existing.Status == FriendshipStatus.Accepted) return BadRequest(ApiResponse<object>.Fail("Hai người đã là bạn bè."));
-            return BadRequest(ApiResponse<object>.Fail("Đã có lời mời kết bạn đang chờ xử lý."));
+            if (existing.Status == FriendshipStatus.Accepted)
+                return BadRequest(ApiResponse<object>.Fail("Hai người đã là bạn bè."));
+            if (existing.Status == FriendshipStatus.Pending)
+                return BadRequest(ApiResponse<object>.Fail("Đã có lời mời kết bạn đang chờ xử lý."));
+
+            // Declined: người bị từ chối phải chờ hết 24 giờ
+            var now = DateTime.UtcNow;
+            if (existing.RequesterId == userId)
+            {
+                var remaining = existing.UpdatedAt + Limits.FriendRequestCooldown - now;
+                if (remaining > TimeSpan.Zero)
+                    return BadRequest(ApiResponse<object>.Fail(
+                        $"Bạn có thể gửi lại lời mời sau {Math.Ceiling(remaining.TotalHours)} giờ."));
+            }
+
+            existing.RequesterId = userId;          // dùng lại dòng cũ (unique index của cặp)
+            existing.AddresseeId = targetUser.Id;
+            existing.Status = FriendshipStatus.Pending;
+            existing.CreatedAt = now;
+            existing.UpdatedAt = now;
+            await _context.SaveChangesAsync();
+            await _hub.Clients.Group(ChatHub.UserGroup(targetUser.Id)).SendAsync("FriendRequestReceived", userId);
+            return Ok(ApiResponse<object>.Ok(null, "Gửi lời mời kết bạn thành công."));
         }
 
         _context.Friendships.Add(new Friendship
@@ -157,11 +178,13 @@ public class FriendsController : ControllerBase
     public async Task<IActionResult> DeclineRequest(Guid friendId)
     {
         var userId = GetCurrentUserId();
-        var request = await _context.Friendships.FirstOrDefaultAsync(f => f.RequesterId == friendId && f.AddresseeId == userId && f.Status == FriendshipStatus.Pending);
+        var request = await _context.Friendships.FirstOrDefaultAsync(f =>
+            f.RequesterId == friendId && f.AddresseeId == userId && f.Status == FriendshipStatus.Pending);
 
         if (request != null)
         {
-            _context.Friendships.Remove(request);
+            request.Status = FriendshipStatus.Declined;   // SỬA: giữ dòng để tính cooldown
+            request.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
         return Ok(ApiResponse<object>.Ok(null, "Đã từ chối lời mời."));

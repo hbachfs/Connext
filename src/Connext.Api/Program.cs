@@ -8,6 +8,9 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.Text;
 using System.Threading.RateLimiting;
+using Connext.Shared;                      
+using Microsoft.AspNetCore.Http.Features;  
+
 
 Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads"));
 
@@ -109,6 +112,9 @@ builder.Services.AddScoped<MessageActionService>();
 builder.Services.Configure<CallOptions>(builder.Configuration.GetSection("Calls"));
 builder.Services.AddSingleton<ICallNotifier, HubCallNotifier>();
 builder.Services.AddSingleton<CallManager>();
+builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = Limits.MaxRequestBytes);
+builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = Limits.MaxRequestBytes);
+builder.Services.AddScoped<IPollService, PollService>();
 
 builder.Services.AddRateLimiter(options =>
 {
