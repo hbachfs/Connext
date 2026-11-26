@@ -1,0 +1,39 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/files"
+method: POST
+body:
+  type: formdata
+  content:
+    - type: file
+      key: file
+      src:
+        - qa2-upload-invalid.exe
+      description: ""
+      disabled: false
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_UPLOAD_02 - Tu choi file sai duoi EXE\", function () {\r
+
+      \    pm.response.to.have.status(400);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Thong bao dinh dang khong duoc ho tro\", function () {\r
+
+      \    pm.expect(pm.response.text()).to.include(\r
+
+      \        \"Định dạng tệp không được hỗ trợ\"\r
+
+      \    );\r
+
+      });\r\n"
+    language: text/javascript
+order: 39000

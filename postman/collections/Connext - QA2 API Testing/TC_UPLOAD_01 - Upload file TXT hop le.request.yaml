@@ -1,0 +1,67 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/files"
+method: POST
+body:
+  type: formdata
+  content:
+    - type: file
+      key: file
+      src:
+        - qa2-upload-test.txt
+      description: ""
+      disabled: false
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_UPLOAD_01 - Upload TXT thanh cong\", function () {\r
+
+      \    pm.response.to.have.status(201);\r
+
+      });\r
+
+      \r
+
+      if (pm.response.code === 201) {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.test(\"Response co thong tin file\", function () {\r
+
+      \        pm.expect(data.id).to.exist;\r
+
+      \        pm.expect(data.fileName).to.eql(\"qa2-upload-test.txt\");\r
+
+      \        pm.expect(data.kind).to.eql(\"File\");\r
+
+      \        pm.expect(data.size).to.be.above(0);\r
+
+      \        pm.expect(data.downloadUrl).to.exist;\r
+
+      \    });\r
+
+      \r
+
+      \    pm.test(\"Luu File ID de test download\", function () {\r
+
+      \        pm.environment.set(\"uploadFileId\", data.id);\r
+
+      \    });\r
+
+      \r
+
+      } else {\r
+
+      \    console.log(\"Upload that bai - HTTP \" + pm.response.code);\r
+
+      \    console.log(pm.response.text());\r
+
+      }\r\n"
+    language: text/javascript
+order: 41000

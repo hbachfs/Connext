@@ -1,0 +1,39 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/files/{{uploadFileId}}"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{convDToken}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_UPLOAD_10 - Tu choi nguoi ngoai download file\", function ()
+      {\r
+
+      \    pm.response.to.have.status(404);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Khong tra ve noi dung file\", function () {\r
+
+      \    pm.expect(pm.response.text()).not.to.include(\r
+
+      \        \"QA2 - Kiem thu upload file hop le cho Connext\"\r
+
+      \    );\r
+
+      \r
+
+      \    pm.expect(\r
+
+      \        pm.response.headers.has(\"Content-Disposition\")\r
+
+      \    ).to.be.false;\r
+
+      });\r\n"
+    language: text/javascript
+order: 32000

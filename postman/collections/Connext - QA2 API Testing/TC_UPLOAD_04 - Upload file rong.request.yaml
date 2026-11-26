@@ -1,0 +1,39 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/files"
+method: POST
+body:
+  type: formdata
+  content:
+    - type: file
+      key: file
+      src:
+        - qa2-upload-empty.txt
+      description: ""
+      disabled: false
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_UPLOAD_04 - Tu choi file rong\", function () {\r
+
+      \    pm.response.to.have.status(400);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Thong bao tep tai len dang trong\", function () {\r
+
+      \    pm.expect(pm.response.text()).to.include(\r
+
+      \        \"Tệp tải lên đang trống\"\r
+
+      \    );\r
+
+      });\r\n"
+    language: text/javascript
+order: 37000

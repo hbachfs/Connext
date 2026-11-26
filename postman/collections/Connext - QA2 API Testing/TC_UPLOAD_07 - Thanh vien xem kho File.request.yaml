@@ -1,0 +1,30 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/media?kind=File"
+method: GET
+queryParams:
+  kind: File
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_UPLOAD_07 - Thanh vien xem kho File\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Response tra ve danh sach file\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \    pm.expect(data).to.be.an(\"array\");\r
+
+      });\r\n"
+    language: text/javascript
+order: 34000

@@ -1,0 +1,35 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/files"
+method: POST
+body:
+  type: formdata
+  content:
+    - type: file
+      key: file
+      src:
+        - qa2-upload-test.txt
+      description: ""
+      disabled: false
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_UPLOAD_12 - Tu choi upload khong co JWT\", function () {\r
+
+      \    pm.response.to.have.status(401);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Nguoi dung phai xac thuc JWT\", function () {\r
+
+      \    pm.expect(pm.response.headers.get(\"WWW-Authenticate\"))\r
+
+      \        .to.include(\"Bearer\");\r
+
+      });\r\n"
+    language: text/javascript
+order: 40283

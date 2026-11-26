@@ -1,0 +1,39 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/files"
+method: POST
+body:
+  type: formdata
+  content:
+    - type: file
+      key: file
+      src:
+        - qa2-upload-oversize.txt
+      description: ""
+      disabled: false
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_UPLOAD_05 - Tu choi file qua dung luong\", function () {\r
+
+      \    pm.response.to.have.status(400);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Thong bao vuot gioi han 100 MB\", function () {\r
+
+      \    pm.expect(pm.response.text()).to.include(\r
+
+      \        \"Kích thước tệp vượt quá giới hạn 100 MB\"\r
+
+      \    );\r
+
+      });\r\n"
+    language: text/javascript
+order: 36000

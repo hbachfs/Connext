@@ -1,0 +1,41 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/files/{{uploadFileId}}"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_UPLOAD_09 - Thanh vien download file thanh cong\", function
+      () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Noi dung file download dung voi file goc\", function () {\r
+
+      \    pm.expect(pm.response.text().trim()).to.eql(\r
+
+      \        \"QA2 - Kiem thu upload file hop le cho Connext\"\r
+
+      \    );\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Response co ten file download chinh xac\", function () {\r
+
+      \    pm.expect(pm.response.headers.get(\"Content-Disposition\"))\r
+
+      \        .to.include(\"qa2-upload-test.txt\");\r
+
+      });\r\n"
+    language: text/javascript
+order: 33000

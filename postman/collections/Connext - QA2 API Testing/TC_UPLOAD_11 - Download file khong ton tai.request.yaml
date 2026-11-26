@@ -1,0 +1,31 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/files/00000000-0000-0000-00\
+  00-000000000001"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_UPLOAD_11 - Download file khong ton tai\", function () {\r
+
+      \    pm.response.to.have.status(404);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Khong tra ve tep download\", function () {\r
+
+      \    pm.expect(\r
+
+      \        pm.response.headers.has(\"Content-Disposition\")\r
+
+      \    ).to.be.false;\r
+
+      });\r\n"
+    language: text/javascript
+order: 31000
