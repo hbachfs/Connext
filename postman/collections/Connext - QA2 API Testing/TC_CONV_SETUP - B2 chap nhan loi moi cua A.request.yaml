@@ -1,0 +1,29 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Contacts/respond"
+method: POST
+body:
+  type: json
+  content: "\r
+
+    {\r
+
+    \  \"requestId\": \"{{convB2RequestId}}\",\r
+
+    \  \"accept\": true\r
+
+    }\r\n"
+auth:
+  type: bearer
+  credentials:
+    token: "{{convB2Token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"SETUP - B2 chap nhan loi moi thanh cong\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r\n"
+    language: text/javascript
+order: 39000

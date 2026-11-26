@@ -1,0 +1,46 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{convB2Token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_CONV_18 - Status 200 OK\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_18 - B2 nhin thay nhom chat\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \    const groupId = pm.environment.get(\"convGroupId\");\r
+
+      \r
+
+      \    pm.expect(data).to.be.an(\"array\");\r
+
+      \    pm.expect(groupId).to.be.a(\"string\");\r
+
+      \r
+
+      \    const group = data.find(item => item.id === groupId);\r
+
+      \r
+
+      \    pm.expect(group, \"B2 phai nhin thay nhom chat\").to.exist;\r
+
+      \    pm.expect(group.name).to.eql(\"QA2 Conversation Test Group\");\r
+
+      \    pm.expect(group.isGroup).to.eql(true);\r
+
+      });\r\n"
+    language: text/javascript
+order: 73000

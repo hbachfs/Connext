@@ -1,0 +1,27 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Contacts/request"
+method: POST
+body:
+  type: json
+  content: "\r
+
+    {\r
+
+    \  \"phoneNumber\": \"0912345694\"\r
+
+    }\r\n"
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"SETUP - A gui loi moi C thanh cong\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r\n"
+    language: text/javascript
+order: 30000

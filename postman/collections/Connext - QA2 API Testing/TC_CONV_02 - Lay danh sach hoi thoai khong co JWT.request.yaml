@@ -1,0 +1,22 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations"
+method: GET
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONV_02 - Status 401 Unauthorized\", function () {\r
+
+      \    pm.response.to.have.status(401);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_02 - Khong tra ve danh sach hoi thoai\", function () {\r
+
+      \    pm.expect(pm.response.code).to.not.eql(200);\r
+
+      });"
+    language: text/javascript
+order: 71000

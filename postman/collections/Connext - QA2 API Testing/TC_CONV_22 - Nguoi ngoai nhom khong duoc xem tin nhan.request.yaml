@@ -1,0 +1,36 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/messages?pageSize=50"
+method: GET
+queryParams:
+  pageSize: "50"
+auth:
+  type: bearer
+  credentials:
+    token: "{{convDToken}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_CONV_22 - Status 404 Not Found\", function () {\r
+
+      \    pm.response.to.have.status(404);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_22 - Nguoi ngoai nhom bi tu choi\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data).to.have.property(\"message\");\r
+
+      \    pm.expect(data.message).to.be.a(\"string\");\r
+
+      \    pm.expect(data.message.length).to.be.greaterThan(0);\r
+
+      });\r\n"
+    language: text/javascript
+order: 61000

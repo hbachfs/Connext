@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Contacts/blocks/{{convDUserId}}"
+method: DELETE
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"SETUP - A bo chan D thanh cong\", function () {\r
+
+      \    pm.response.to.have.status(204);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"SETUP - Response Body rong\", function () {\r
+
+      \    pm.expect(pm.response.text()).to.eql(\"\");\r
+
+      });"
+    language: text/javascript
+order: 27070

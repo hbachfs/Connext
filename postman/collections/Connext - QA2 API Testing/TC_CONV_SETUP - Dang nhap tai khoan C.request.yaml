@@ -1,0 +1,33 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Auth/login"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"phoneNumber\": \"0912345694\",\r
+
+    \  \"password\": \"{{convCPassword}}\"\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"SETUP - Dang nhap C thanh cong\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      if (pm.response.code === 200) {\r
+
+      \    const data = pm.response.json();\r
+
+      \    pm.environment.set(\"convCToken\", data.token);\r
+
+      }\r\n"
+    language: text/javascript
+order: 10000

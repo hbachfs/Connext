@@ -1,0 +1,39 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/messages?pageSize=1.5"
+method: GET
+queryParams:
+  pageSize: "1.5"
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_CONV_29 - Status 400 Bad Request\", function () {\r
+
+      \    pm.response.to.have.status(400);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_29 - Loi pageSize khong phai so nguyen\", function ()
+      {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    const errors = data.errors || {};\r
+
+      \    const pageSizeError = errors.pageSize || errors.PageSize;\r
+
+      \r
+
+      \    pm.expect(pageSizeError, \"Phai co loi cua pageSize\").to.exist;\r
+
+      });\r\n"
+    language: text/javascript
+order: 65000

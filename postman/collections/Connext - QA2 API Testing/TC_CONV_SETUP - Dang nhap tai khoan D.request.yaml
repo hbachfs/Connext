@@ -1,0 +1,43 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Auth/login"
+method: POST
+body:
+  type: json
+  content: "\r
+
+    {\r
+
+    \  \"phoneNumber\": \"0912345695\",\r
+
+    \  \"password\": \"{{convDPassword}}\"\r
+
+    }\r\n"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"SETUP - Dang nhap D thanh cong\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"SETUP - Luu JWT cua D\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.token).to.be.a(\"string\");\r
+
+      \    pm.expect(data.token.length).to.be.greaterThan(0);\r
+
+      \r
+
+      \    pm.environment.set(\"convDToken\", data.token);\r
+
+      });\r\n"
+    language: text/javascript
+order: 9000

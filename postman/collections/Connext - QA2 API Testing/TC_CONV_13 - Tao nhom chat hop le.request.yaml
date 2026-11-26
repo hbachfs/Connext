@@ -1,0 +1,61 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/groups"
+method: POST
+body:
+  type: json
+  content: "\r
+
+    {\r
+
+    \  \"name\": \"QA2 Conversation Test Group\",\r
+
+    \  \"memberIds\": [\r
+
+    \    \"{{convB2UserId}}\",\r
+
+    \    \"{{convCUserId}}\"\r
+
+    \  ]\r
+
+    }\r\n"
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_CONV_13 - Status 201 Created\", function () {\r
+
+      \    pm.response.to.have.status(201);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_13 - Tao nhom thanh cong\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.id).to.be.a(\"string\");\r
+
+      \    pm.expect(data.name).to.eql(\"QA2 Conversation Test Group\");\r
+
+      \    pm.expect(data.isGroup).to.eql(true);\r
+
+      });\r
+
+      \r
+
+      if (pm.response.code === 201) {\r
+
+      \    const data = pm.response.json();\r
+
+      \    pm.environment.set(\"convGroupId\", data.id);\r
+
+      }\r\n"
+    language: text/javascript
+order: 51000

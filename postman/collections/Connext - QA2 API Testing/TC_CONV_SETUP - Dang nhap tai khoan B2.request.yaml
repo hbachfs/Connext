@@ -1,0 +1,37 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Auth/login"
+method: POST
+body:
+  type: json
+  content: "\r
+
+    {\r
+
+    \  \"phoneNumber\": \"0912345693\",\r
+
+    \  \"password\": \"{{convB2Password}}\"\r
+
+    }\r\n"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"SETUP - Dang nhap B2 thanh cong\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      if (pm.response.code === 200) {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.environment.set(\"convB2Token\", data.token);\r
+
+      }\r\n"
+    language: text/javascript
+order: 11000

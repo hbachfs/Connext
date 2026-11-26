@@ -1,0 +1,48 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Contacts/requests"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{convCToken}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"SETUP - C lay loi moi thanh cong\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"SETUP - C nhan duoc loi moi tu A\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.received).to.be.an(\"array\");\r
+
+      \r
+
+      \    const request = data.received.find(\r
+
+      \        item => item.phoneNumber === \"+84912345678\"\r
+
+      \    );\r
+
+      \r
+
+      \    pm.expect(request, \"Phai co loi moi tu A\").to.exist;\r
+
+      \    pm.expect(request.requestId).to.be.a(\"string\");\r
+
+      \r
+
+      \    pm.environment.set(\"convCRequestId\", request.requestId);\r
+
+      });\r\n"
+    language: text/javascript
+order: 33000

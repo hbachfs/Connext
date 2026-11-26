@@ -1,0 +1,34 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/00000000-0000-0000-0000-000000000001/read"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_CONV_16 - Status 404 Not Found\", function () {\r
+
+      \    pm.response.to.have.status(404);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_16 - Response co thong bao loi\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data).to.have.property(\"message\");\r
+
+      \    pm.expect(data.message).to.be.a(\"string\");\r
+
+      \    pm.expect(data.message.length).to.be.greaterThan(0);\r
+
+      });\r\n"
+    language: text/javascript
+order: 56000

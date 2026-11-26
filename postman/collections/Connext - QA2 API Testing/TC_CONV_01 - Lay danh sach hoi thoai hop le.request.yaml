@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONV_01 - Status 200 OK\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_01 - Response la danh sach hoi thoai\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \    pm.expect(data).to.be.an(\"array\");\r
+
+      });"
+    language: text/javascript
+order: 75000
