@@ -1,0 +1,39 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/files"
+method: POST
+body:
+  type: formdata
+  content:
+    - type: file
+      key: file
+      src:
+        - qa2-upload-test.txt
+      description: ""
+      disabled: false
+auth:
+  type: bearer
+  credentials:
+    token: "{{convDToken}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_UPLOAD_06 - Tu choi nguoi ngoai hoi thoai\", function () {\r
+
+      \    pm.response.to.have.status(400);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Thong bao khong thuoc cuoc hoi thoai\", function () {\r
+
+      \    pm.expect(pm.response.text()).to.include(\r
+
+      \        \"Bạn không thuộc cuộc hội thoại này\"\r
+
+      \    );\r
+
+      });\r\n"
+    language: text/javascript
+order: 35000
