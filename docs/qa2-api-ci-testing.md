@@ -78,10 +78,40 @@ Workflow được thiết kế để chạy độc lập với CI hiện có.
 - Không thay thế toàn bộ Postman Collection.
 - Health endpoint không kiểm tra đầy đủ các dịch vụ phụ thuộc.
 
-## 8. Trạng thái
+
+## 8. Trạng thái và kết quả GitHub Actions
 
 - Kiểm thử trên Windows localhost: PASS.
-- GitHub Actions: chờ xác nhận kết quả thực tế.
+- Kiểm thử trên GitHub Actions (Ubuntu): PASS.
+- Pull Request: #90.
+- Commit kiểm thử CI ban đầu: 36423dc.
+- Ngày kiểm thử: 27/11/2026.
+
+### Kết quả kiểm thử trên CI
+
+| Thông số | Kết quả |
+| --- | --- |
+| Requests | 5/5 PASS |
+| Assertions | 10/10 PASS |
+| Failed | 0 |
+| Tổng thời gian chạy | 131 ms |
+| Phản hồi trung bình | 11 ms |
+| Phản hồi thấp nhất | 2 ms |
+| Phản hồi cao nhất | 25 ms |
+| Xuất báo cáo JUnit XML | Thành công |
+| Upload Artifact | Thành công |
+
+Artifact: qa2-smoke-test-results.zip
+
+GitHub Actions Run:
+https://github.com/hbachfs/Connext/actions/runs/46029691153
+
+Kết luận: Đã tích hợp thành công Postman CLI vào
+GitHub Actions để tự động chạy bộ API Smoke Test.
+
+Bộ kiểm thử này chưa thay thế toàn bộ Postman Collection
+và không bao gồm các bài kiểm thử tải SignalR.
+
 
 ## 9. Issue liên quan
 
