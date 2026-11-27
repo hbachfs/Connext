@@ -1,0 +1,57 @@
+$kind: http-request
+url: "{{baseUrl}}/hubs/chat/negotiate?negotiateVersion=1"
+method: POST
+queryParams:
+  negotiateVersion: "1"
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_SIGNALR_01 - Negotiate Hub thanh cong\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Response co thong tin ket noi SignalR\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data.connectionId).to.be.a(\"string\").and.not.be.empty;\r
+
+      \    pm.expect(data.connectionToken).to.be.a(\"string\").and.not.be.empty;\
+      \r
+
+      \    pm.expect(data.negotiateVersion).to.eql(1);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Hub ho tro WebSockets\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    const transports = data.availableTransports.map(\r
+
+      \        item => item.transport\r
+
+      \    );\r
+
+      \r
+
+      \    pm.expect(transports).to.include(\"WebSockets\");\r
+
+      });\r\n"
+    language: text/javascript
+order: 12000

@@ -1,0 +1,28 @@
+$kind: http-request
+url: "{{baseUrl}}/hubs/chat/negotiate?negotiateVersion=1"
+method: POST
+queryParams:
+  negotiateVersion: "1"
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_SIGNALR_02 - Tu choi ket noi khong co JWT\", function () {\r
+
+      \    pm.response.to.have.status(401);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Hub yeu cau xac thuc JWT\", function () {\r
+
+      \    pm.expect(pm.response.headers.get(\"WWW-Authenticate\"))\r
+
+      \        .to.include(\"Bearer\");\r
+
+      });\r\n"
+    language: text/javascript
+order: 11000
