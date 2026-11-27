@@ -1,0 +1,46 @@
+$kind: http-request
+url: "{{baseUrl}}/hubs/chat/negotiate?negotiateVersion=1"
+method: POST
+queryParams:
+  negotiateVersion: "1"
+auth:
+  type: bearer
+  credentials:
+    token: "{{expiredToken}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_SIGNALR_04 - Tu choi JWT het han\", function () {\r
+
+      \    pm.response.to.have.status(401);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Hub tu choi token khong hop le\", function () {\r
+
+      \    const header = pm.response.headers.get(\"WWW-Authenticate\") || \"\";\r
+
+      \r
+
+      \    pm.expect(header).to.include(\"Bearer\");\r
+
+      \    pm.expect(header).to.include(\"invalid_token\");\r
+
+      });\r
+
+      \r
+
+      pm.test(\"JWT bi tu choi do het han\", function () {\r
+
+      \    const header = pm.response.headers.get(\"WWW-Authenticate\") || \"\";\r
+
+      \r
+
+      \    pm.expect(header).to.match(/expired/i);\r
+
+      });\r\n"
+    language: text/javascript
+order: 9917
