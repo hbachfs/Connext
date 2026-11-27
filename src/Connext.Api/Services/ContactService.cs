@@ -21,6 +21,7 @@ public interface IContactService
 
 public class ContactService : IContactService
 {
+    private static readonly TimeSpan DeclinedRequestCooldown = TimeSpan.FromHours(24);
     private readonly AppDbContext _context;
     private readonly IConversationService _conversationService;
 
@@ -88,6 +89,8 @@ public class ContactService : IContactService
 
         if (existing?.Status == FriendshipStatus.Declined)
         {
+            if (DateTime.UtcNow - existing.UpdatedAt < DeclinedRequestCooldown)
+                return false;
             existing.RequesterId = requesterId;
             existing.AddresseeId = targetUser.Id;
             existing.Status = FriendshipStatus.Pending;

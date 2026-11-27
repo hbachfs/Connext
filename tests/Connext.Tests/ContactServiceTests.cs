@@ -151,7 +151,7 @@ public class ContactServiceTests
     }
 
     [Fact]
-    public async Task DeclinedRequest_CanBeSentAgain()
+    public async Task DeclinedRequest_CanBeSentAgainAfterTwentyFourHours()
     {
         using var context = CreateInMemoryDbContext();
         var requester = CreateUser("0900000001", "Requester");
@@ -163,6 +163,9 @@ public class ContactServiceTests
         Assert.True(await service.SendFriendRequestAsync(requester.Id, addressee.PhoneNumber));
         var request = await context.Friendships.SingleAsync();
         Assert.True(await service.RespondToRequestAsync(addressee.Id, request.Id, accept: false));
+        Assert.False(await service.SendFriendRequestAsync(requester.Id, addressee.PhoneNumber));
+
+        request.UpdatedAt = DateTime.UtcNow.AddHours(-24).AddSeconds(-1);
         Assert.True(await service.SendFriendRequestAsync(requester.Id, addressee.PhoneNumber));
 
         Assert.Equal(FriendshipStatus.Pending, request.Status);
@@ -316,6 +319,12 @@ public class ContactServiceTests
             Task.CompletedTask;
 
         public Task CallHistoryRecordedAsync(Guid conversationId, MessageResponseDto message) =>
+            Task.CompletedTask;
+
+        public Task PollCreatedAsync(Guid conversationId, MessageResponseDto message) =>
+            Task.CompletedTask;
+
+        public Task PollVotedAsync(Guid conversationId, PollVoteUpdateDto update) =>
             Task.CompletedTask;
     }
 

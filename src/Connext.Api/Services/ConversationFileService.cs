@@ -9,10 +9,10 @@ namespace Connext.Api.Services;
 
 public class ConversationFileService : IConversationFileService
 {
-    public const long MaxImageBytes = 100L * 1024 * 1024;
-    public const long MaxVideoBytes = 1024L * 1024 * 1024;
+    public const long MaxImageBytes = 15L * 1024 * 1024;
+    public const long MaxVideoBytes = 100L * 1024 * 1024;
     public const long MaxDocumentBytes = 100L * 1024 * 1024;
-    public const long MaxRequestBytes = MaxVideoBytes + 1024 * 1024;
+    public const long MaxRequestBytes = 110L * 1024 * 1024;
 
     private static readonly HashSet<string> ImageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
     private static readonly HashSet<string> DocumentExtensions = [".pdf", ".txt", ".docx", ".xlsx", ".pptx"];

@@ -82,6 +82,38 @@ public class ConnectionTrackerTests
             message.Method == "ConversationMemberAdded");
     }
 
+    [Fact]
+    public async Task ChatNotifier_BroadcastsPollEventsToTheConversationRoom()
+    {
+        var conversationId = Guid.NewGuid();
+        var groups = new TestGroupManager();
+        var clients = new TestHubClients();
+        var notifier = new ChatNotifier(new TestHubContext(groups, clients), new ConnectionTracker());
+        var message = new Connext.Shared.DTOs.Conversations.MessageResponseDto
+        {
+            Id = Guid.NewGuid(),
+            Type = Connext.Shared.DTOs.Conversations.MessageType.Poll
+        };
+        var poll = new Connext.Shared.DTOs.Conversations.PollResponseDto { Id = Guid.NewGuid() };
+        var voteUpdate = new Connext.Shared.DTOs.Conversations.PollVoteUpdateDto
+        {
+            Poll = poll,
+            UserId = Guid.NewGuid(),
+            OptionId = Guid.NewGuid()
+        };
+
+        message.Poll = poll;
+        await notifier.PollCreatedAsync(conversationId, message);
+        await notifier.PollVotedAsync(conversationId, voteUpdate);
+
+        Assert.Contains(clients.SentEvents, message =>
+            message.Destination == ChatHub.ConversationRoom(conversationId) &&
+            message.Method == "PollCreated");
+        Assert.Contains(clients.SentEvents, message =>
+            message.Destination == ChatHub.ConversationRoom(conversationId) &&
+            message.Method == "PollVoted");
+    }
+
     private sealed class TestHubContext(IGroupManager groups, IHubClients clients) : IHubContext<ChatHub>
     {
         public IHubClients Clients { get; } = clients;

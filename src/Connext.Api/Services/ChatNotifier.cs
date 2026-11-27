@@ -83,4 +83,12 @@ public class ChatNotifier : IChatNotifier
     public Task CallHistoryRecordedAsync(Guid conversationId, MessageResponseDto message) =>
         _hubContext.Clients.Group(ChatHub.ConversationRoom(conversationId))
             .SendAsync("ReceiveMessage", message);
+
+    public Task PollCreatedAsync(Guid conversationId, MessageResponseDto message) =>
+        _hubContext.Clients.Group(ChatHub.ConversationRoom(conversationId))
+            .SendAsync("PollCreated", message);
+
+    public Task PollVotedAsync(Guid conversationId, PollVoteUpdateDto update) =>
+        _hubContext.Clients.Group(ChatHub.ConversationRoom(conversationId))
+            .SendAsync("PollVoted", update);
 }

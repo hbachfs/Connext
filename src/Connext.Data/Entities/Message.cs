@@ -22,4 +22,5 @@ public class Message
     public DateTime? EditedAt { get; set; }
     public ICollection<MessageReaction> Reactions { get; set; } = [];
     public ICollection<MessageMention> Mentions { get; set; } = [];
+    public Poll? Poll { get; set; }
 }

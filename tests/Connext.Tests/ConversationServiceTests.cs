@@ -47,6 +47,36 @@ public class ConversationServiceTests
     }
 
     [Fact]
+    public async Task CreateGroupAsync_EnforcesFiftyMemberLimitDuringCreationAndAddition()
+    {
+        using var context = CreateDbContext();
+        var creator = CreateUser("Creator");
+        var friends = Enumerable.Range(0, 50).Select(index => CreateUser($"Friend {index}")).ToList();
+        context.Users.AddRange([creator, .. friends]);
+        context.Friendships.AddRange(friends.Select(friend => CreateFriendship(creator, friend)));
+        await context.SaveChangesAsync();
+        var service = new ConversationService(context, new TestChatNotifier());
+
+        var group = await service.CreateGroupAsync(creator.Id, new CreateGroupConversationDto
+        {
+            Name = "Maximum",
+            MemberIds = friends.Take(49).Select(friend => friend.Id).ToList()
+        });
+
+        Assert.Equal(50, await context.ConversationMembers.CountAsync(member =>
+            member.ConversationId == group.Id));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.AddMemberAsync(
+            creator.Id, group.Id, friends[49].Id));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateGroupAsync(
+            creator.Id,
+            new CreateGroupConversationDto
+            {
+                Name = "Too large",
+                MemberIds = friends.Select(friend => friend.Id).ToList()
+            }));
+    }
+
+    [Fact]
     public async Task GroupCreation_NotifiesEveryMember()
     {
         using var context = CreateDbContext();
@@ -448,12 +478,12 @@ public class ConversationServiceTests
         });
         Assert.Equal(original.Id, reply.ReplyToMessage!.Id);
         Assert.Equal("Tin nhắn gốc", reply.ReplyToMessage.Content);
-        await service.AddReactionAsync(recipient.Id, direct.Id, original.Id, "👍");
+        await service.AddReactionAsync(recipient.Id, direct.Id, original.Id, "Like");
         await service.PinMessageAsync(sender.Id, direct.Id, original.Id);
 
         var messages = await service.GetMessagesAsync(sender.Id, direct.Id, 50);
         Assert.Equal(original.Id, messages.First().Id);
-        Assert.Contains(recipient.Id, messages.First().Reactions["👍"]);
+        Assert.Contains(recipient.Id, messages.First().Reactions["Like"]);
         Assert.Contains(recipient.Id, messages.First().MentionedUserIds);
 
         await service.RecallMessageAsync(sender.Id, direct.Id, original.Id);
@@ -504,18 +534,54 @@ public class ConversationServiceTests
         {
             MessageId = message.Id,
             UserId = recipient.Id,
-            Emoji = "👍"
+            Emoji = "Like"
         });
         await context.SaveChangesAsync();
         var notifier = new TestChatNotifier();
         var service = new ConversationService(context, notifier);
 
-        await service.AddReactionAsync(recipient.Id, conversation.Id, message.Id, "❤️");
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.AddReactionAsync(recipient.Id, conversation.Id, message.Id, "👍"));
+        await service.AddReactionAsync(recipient.Id, conversation.Id, message.Id, "Love");
 
         var reaction = await context.MessageReactions.SingleAsync();
-        Assert.Equal("❤️", reaction.Emoji);
-        Assert.Equal((conversation.Id, message.Id, recipient.Id, "👍"), Assert.Single(notifier.RemovedReactions));
-        Assert.Equal((conversation.Id, message.Id, recipient.Id, "❤️"), Assert.Single(notifier.AddedReactions));
+        Assert.Equal("Love", reaction.Emoji);
+        Assert.Equal((conversation.Id, message.Id, recipient.Id, "Like"), Assert.Single(notifier.RemovedReactions));
+        Assert.Equal((conversation.Id, message.Id, recipient.Id, "Love"), Assert.Single(notifier.AddedReactions));
+    }
+
+    [Theory]
+    [InlineData("Like")]
+    [InlineData("Love")]
+    [InlineData("Haha")]
+    [InlineData("Wow")]
+    [InlineData("Sad")]
+    [InlineData("Angry")]
+    public async Task AddReactionAsync_AcceptsEachSupportedReaction(string reaction)
+    {
+        using var context = CreateDbContext();
+        var sender = CreateUser("Sender");
+        var member = CreateUser("Member");
+        context.Users.AddRange(sender, member);
+        var conversation = new Conversation { Id = Guid.NewGuid(), CreatedById = sender.Id };
+        context.Conversations.Add(conversation);
+        context.ConversationMembers.AddRange(
+            new ConversationMember { ConversationId = conversation.Id, UserId = sender.Id },
+            new ConversationMember { ConversationId = conversation.Id, UserId = member.Id });
+        var message = new Message
+        {
+            ConversationId = conversation.Id,
+            SenderId = sender.Id,
+            Content = "Hello",
+            Type = MessageType.Text
+        };
+        context.Messages.Add(message);
+        await context.SaveChangesAsync();
+        var service = new ConversationService(context, new TestChatNotifier());
+
+        await service.AddReactionAsync(member.Id, conversation.Id, message.Id, reaction);
+
+        Assert.Equal(reaction, Assert.Single(await context.MessageReactions.ToListAsync()).Emoji);
     }
 
     [Fact]
@@ -546,7 +612,7 @@ public class ConversationServiceTests
         {
             MessageId = message.Id,
             UserId = member.Id,
-            Emoji = "👍"
+            Emoji = "Like"
         });
         await context.SaveChangesAsync();
         var service = new ConversationService(context, new TestChatNotifier());
@@ -554,7 +620,7 @@ public class ConversationServiceTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.RecallMessageAsync(member.Id, firstConversation.Id, message.Id));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.RemoveReactionAsync(member.Id, firstConversation.Id, message.Id, "👍"));
+            service.RemoveReactionAsync(member.Id, firstConversation.Id, message.Id, "Like"));
 
         Assert.False((await context.Messages.SingleAsync()).IsDeleted);
         Assert.Single(await context.MessageReactions.ToListAsync());
@@ -594,6 +660,135 @@ public class ConversationServiceTests
 
         Assert.Equal((conversation.Id, message.Id, sender.Id), Assert.Single(notifier.PinnedMessages));
         Assert.Equal((conversation.Id, message.Id, sender.Id), Assert.Single(notifier.UnpinnedMessages));
+    }
+
+    [Fact]
+    public async Task PinMessageAsync_RejectsTheSixthPinnedMessage()
+    {
+        using var context = CreateDbContext();
+        var sender = CreateUser("Sender");
+        var member = CreateUser("Member");
+        context.Users.AddRange(sender, member);
+        var conversation = new Conversation { Id = Guid.NewGuid(), CreatedById = sender.Id };
+        context.Conversations.Add(conversation);
+        context.ConversationMembers.AddRange(
+            new ConversationMember { ConversationId = conversation.Id, UserId = sender.Id },
+            new ConversationMember { ConversationId = conversation.Id, UserId = member.Id });
+        var messages = Enumerable.Range(0, 6).Select(index => new Message
+        {
+            ConversationId = conversation.Id,
+            SenderId = sender.Id,
+            Content = $"Message {index}",
+            Type = MessageType.Text
+        }).ToList();
+        context.Messages.AddRange(messages);
+        await context.SaveChangesAsync();
+        var service = new ConversationService(context, new TestChatNotifier());
+
+        foreach (var message in messages.Take(5))
+            await service.PinMessageAsync(sender.Id, conversation.Id, message.Id);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.PinMessageAsync(sender.Id, conversation.Id, messages[5].Id));
+        Assert.Equal(5, await context.Messages.CountAsync(message =>
+            message.ConversationId == conversation.Id && message.IsPinned));
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_EnforcesTwoThousandCharacterLimit()
+    {
+        using var context = CreateDbContext();
+        var sender = CreateUser("Sender");
+        var recipient = CreateUser("Recipient");
+        context.Users.AddRange(sender, recipient);
+        var conversation = new Conversation { Id = Guid.NewGuid(), CreatedById = sender.Id };
+        context.Conversations.Add(conversation);
+        context.ConversationMembers.AddRange(
+            new ConversationMember { ConversationId = conversation.Id, UserId = sender.Id },
+            new ConversationMember { ConversationId = conversation.Id, UserId = recipient.Id });
+        await context.SaveChangesAsync();
+        var service = new ConversationService(context, new TestChatNotifier());
+
+        var sent = await service.SendMessageAsync(sender.Id, new SendMessageDto
+        {
+            ConversationId = conversation.Id,
+            Content = new string('x', 2000)
+        });
+        Assert.Equal(2000, sent.Content.Length);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SendMessageAsync(
+            sender.Id,
+            new SendMessageDto
+            {
+                ConversationId = conversation.Id,
+                Content = new string('x', 2001)
+            }));
+    }
+
+    [Fact]
+    public async Task RecallMessageAsync_AllowsWithinTwentyFourHoursAndRejectsExpiredMessages()
+    {
+        using var context = CreateDbContext();
+        var sender = CreateUser("Sender");
+        var member = CreateUser("Member");
+        context.Users.AddRange(sender, member);
+        var conversation = new Conversation { Id = Guid.NewGuid(), CreatedById = sender.Id };
+        context.Conversations.Add(conversation);
+        context.ConversationMembers.AddRange(
+            new ConversationMember { ConversationId = conversation.Id, UserId = sender.Id },
+            new ConversationMember { ConversationId = conversation.Id, UserId = member.Id });
+        var recent = new Message
+        {
+            ConversationId = conversation.Id,
+            SenderId = sender.Id,
+            Content = "Recent",
+            Type = MessageType.Text,
+            CreatedAt = DateTime.UtcNow.AddHours(-24).AddSeconds(1)
+        };
+        var expired = new Message
+        {
+            ConversationId = conversation.Id,
+            SenderId = sender.Id,
+            Content = "Expired",
+            Type = MessageType.Text,
+            CreatedAt = DateTime.UtcNow.AddHours(-24).AddSeconds(-1)
+        };
+        context.Messages.AddRange(recent, expired);
+        await context.SaveChangesAsync();
+        var service = new ConversationService(context, new TestChatNotifier());
+
+        await service.RecallMessageAsync(sender.Id, conversation.Id, recent.Id);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.RecallMessageAsync(sender.Id, conversation.Id, expired.Id));
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_ExpandsGroupAllMentionToOtherMembers()
+    {
+        using var context = CreateDbContext();
+        var sender = CreateUser("Sender");
+        var firstMember = CreateUser("First");
+        var secondMember = CreateUser("Second");
+        context.Users.AddRange(sender, firstMember, secondMember);
+        context.Friendships.AddRange(
+            CreateFriendship(sender, firstMember),
+            CreateFriendship(sender, secondMember));
+        await context.SaveChangesAsync();
+        var service = new ConversationService(context, new TestChatNotifier());
+        var group = await service.CreateGroupAsync(sender.Id, new CreateGroupConversationDto
+        {
+            Name = "Team",
+            MemberIds = [firstMember.Id, secondMember.Id]
+        });
+
+        var message = await service.SendMessageAsync(sender.Id, new SendMessageDto
+        {
+            ConversationId = group.Id,
+            Content = "Hi @all!"
+        });
+
+        Assert.Equal(2, message.MentionedUserIds.Count);
+        Assert.Contains(firstMember.Id, message.MentionedUserIds);
+        Assert.Contains(secondMember.Id, message.MentionedUserIds);
+        Assert.DoesNotContain(sender.Id, message.MentionedUserIds);
     }
 
     [Fact]
@@ -734,6 +929,12 @@ public class ConversationServiceTests
         }
 
         public Task CallHistoryRecordedAsync(Guid conversationId, MessageResponseDto message) =>
+            Task.CompletedTask;
+
+        public Task PollCreatedAsync(Guid conversationId, MessageResponseDto message) =>
+            Task.CompletedTask;
+
+        public Task PollVotedAsync(Guid conversationId, PollVoteUpdateDto update) =>
             Task.CompletedTask;
     }
 }

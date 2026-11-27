@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Connext.Data;
 using Connext.Data.Entities;
 using Connext.Shared.DTOs.Conversations;
@@ -8,6 +9,15 @@ namespace Connext.Api.Services;
 public class ConversationService : IConversationService
 {
     private const int MaxPageSize = 50;
+    private const int MaxGroupMembers = 50;
+    private const int MaxMessageLength = 2000;
+    private const int MaxPinnedMessages = 5;
+    private const int MaxRecallHours = 24;
+    private static readonly HashSet<string> AllowedReactions =
+        new(["Like", "Love", "Haha", "Wow", "Sad", "Angry"], StringComparer.OrdinalIgnoreCase);
+    private static readonly Regex MentionAllRegex = new(
+        @"(?<![\p{L}\p{N}_])@all(?![\p{L}\p{N}_])",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private readonly AppDbContext _context;
     private readonly IChatNotifier _chatNotifier;
 
@@ -60,9 +70,13 @@ public class ConversationService : IConversationService
         CreateGroupConversationDto request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (request.MemberIds is null)
+            throw new InvalidOperationException("Danh sách thành viên không hợp lệ.");
         var memberIds = request.MemberIds.Distinct().ToList();
         if (memberIds.Contains(creatorId) || memberIds.Count < 2)
             throw new InvalidOperationException("Nhóm cần ít nhất ba người, bao gồm người tạo.");
+        if (memberIds.Count + 1 > MaxGroupMembers)
+            throw new InvalidOperationException($"Nhóm không được vượt quá {MaxGroupMembers} thành viên.");
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new InvalidOperationException("Tên nhóm không được để trống.");
 
@@ -130,12 +144,16 @@ public class ConversationService : IConversationService
             .Include(message => message.Receipts)
             .Include(message => message.Reactions)
             .Include(message => message.Mentions)
+            .Include(message => message.Poll)
+                .ThenInclude(poll => poll!.Options)
+            .Include(message => message.Poll)
+                .ThenInclude(poll => poll!.Votes)
             .Include(message => message.ReplyToMessage)
                 .ThenInclude(reply => reply!.Sender)
             .ToListAsync();
 
         return messages.OrderBy(message => message.CreatedAt).ThenBy(message => message.Id)
-            .Select(ToResponse).ToList();
+            .Select(message => ToResponse(message, userId)).ToList();
     }
 
     public async Task MarkReadAsync(Guid userId, Guid conversationId)
@@ -156,7 +174,7 @@ public class ConversationService : IConversationService
         ArgumentNullException.ThrowIfNull(request);
         var content = request.Content?.Trim();
         if (request.ConversationId == Guid.Empty || string.IsNullOrEmpty(content) ||
-            content.Length > 4000 ||
+            content.Length > MaxMessageLength ||
             request.Type is not (MessageType.Text or MessageType.Image or MessageType.File))
             throw new InvalidOperationException("Nội dung hoặc loại tin nhắn không hợp lệ.");
 
@@ -182,11 +200,14 @@ public class ConversationService : IConversationService
             CreatedAt = DateTime.UtcNow,
             ReplyToMessageId = request.ReplyToMessageId
         };
-        var mentionedUserIds = request.MentionedUserIds.Distinct()
-            .Where(id => conversation.Members.Any(member => member.UserId == id))
-            .ToList();
         if (request.MentionedUserIds.Any(id => !conversation.Members.Any(member => member.UserId == id)))
             throw new InvalidOperationException("Chỉ có thể nhắc thành viên trong cuộc hội thoại.");
+        var mentionedUserIds = request.MentionedUserIds.Distinct().ToList();
+        if (conversation.IsGroup && MentionAllRegex.IsMatch(content))
+            mentionedUserIds = mentionedUserIds
+                .Concat(conversation.Members.Where(member => member.UserId != userId).Select(member => member.UserId))
+                .Distinct()
+                .ToList();
         if (await HasBlockedPairAsync(userId, mentionedUserIds))
             throw new InvalidOperationException("Không thể nhắc người dùng đã bị chặn.");
         if (request.ReplyToMessageId.HasValue)
@@ -214,6 +235,110 @@ public class ConversationService : IConversationService
             await _context.Entry(message.ReplyToMessage!).Reference(item => item.Sender).LoadAsync();
         }
         return ToResponse(message);
+    }
+
+    public async Task<PollResponseDto> CreatePollAsync(
+        Guid userId,
+        Guid conversationId,
+        CreatePollDto request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var question = request.Question?.Trim();
+        var options = request.Options?.Select(option => option?.Trim()).ToList();
+        if (string.IsNullOrWhiteSpace(question) || question.Length > 200 ||
+            options is null || options.Count is < 2 or > 10 ||
+            options.Any(string.IsNullOrWhiteSpace) ||
+            options.Distinct(StringComparer.OrdinalIgnoreCase).Count() != options.Count)
+            throw new InvalidOperationException("Câu hỏi hoặc lựa chọn bình chọn không hợp lệ.");
+
+        var conversation = await _context.Conversations
+            .Include(item => item.Members)
+            .FirstOrDefaultAsync(item => item.Id == conversationId);
+        if (conversation is null || !conversation.IsGroup ||
+            conversation.Members.All(member => member.UserId != userId))
+            throw new InvalidOperationException("Chỉ thành viên của nhóm mới có thể tạo bình chọn.");
+
+        var now = DateTime.UtcNow;
+        var message = new Message
+        {
+            Id = Guid.NewGuid(),
+            ConversationId = conversationId,
+            SenderId = userId,
+            Content = question,
+            Type = MessageType.Poll,
+            CreatedAt = now
+        };
+        var poll = new Poll
+        {
+            Id = Guid.NewGuid(),
+            MessageId = message.Id,
+            Message = message,
+            Question = question,
+            CreatedAt = now,
+            Options = options.Select(text => new PollOption
+            {
+                Id = Guid.NewGuid(),
+                Text = text!
+            }).ToList()
+        };
+        message.Poll = poll;
+        _context.Messages.Add(message);
+        _context.Polls.Add(poll);
+        await _context.SaveChangesAsync();
+
+        var result = ToPollResponse(poll, userId, conversationId);
+        await _context.Entry(message).Reference(item => item.Sender).LoadAsync();
+        await _chatNotifier.PollCreatedAsync(conversationId, ToResponse(message, userId));
+        return result;
+    }
+
+    public async Task<PollResponseDto> GetPollAsync(Guid userId, Guid conversationId, Guid pollId)
+    {
+        var poll = await GetGroupPollAsync(userId, conversationId, pollId);
+        return ToPollResponse(poll, userId, conversationId);
+    }
+
+    public async Task<PollResponseDto> VotePollAsync(
+        Guid userId,
+        Guid conversationId,
+        Guid pollId,
+        Guid optionId)
+    {
+        var poll = await GetGroupPollAsync(userId, conversationId, pollId);
+        var option = poll.Options.FirstOrDefault(candidate => candidate.Id == optionId);
+        if (option is null)
+            throw new InvalidOperationException("Lựa chọn không thuộc bình chọn này.");
+
+        var vote = poll.Votes.FirstOrDefault(candidate => candidate.UserId == userId);
+        if (vote?.OptionId == optionId)
+            return ToPollResponse(poll, userId, conversationId);
+
+        if (vote is null)
+        {
+            poll.Votes.Add(new PollVote
+            {
+                PollId = poll.Id,
+                UserId = userId,
+                OptionId = optionId,
+                VotedAt = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            vote.OptionId = optionId;
+            vote.VotedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+        var result = ToPollResponse(poll, userId, conversationId);
+        var update = new PollVoteUpdateDto
+        {
+            Poll = ToPollResponse(poll, Guid.Empty, conversationId),
+            UserId = userId,
+            OptionId = optionId
+        };
+        await _chatNotifier.PollVotedAsync(conversationId, update);
+        return result;
     }
 
     public async Task<MessageResponseDto> RecordCallHistoryAsync(
@@ -303,6 +428,8 @@ public class ConversationService : IConversationService
             throw new InvalidOperationException("Không thể thêm thành viên vào cuộc hội thoại 1-1.");
         if (conversation.Members.Any(member => member.UserId == memberId))
             throw new InvalidOperationException("Người dùng đã là thành viên.");
+        if (conversation.Members.Count >= MaxGroupMembers)
+            throw new InvalidOperationException($"Nhóm không được vượt quá {MaxGroupMembers} thành viên.");
         var friend = await _context.Friendships.AnyAsync(item =>
             item.Status == FriendshipStatus.Accepted &&
             ((item.RequesterId == userId && item.AddresseeId == memberId) ||
@@ -432,7 +559,7 @@ public class ConversationService : IConversationService
             item.Id == messageId && item.ConversationId == conversationId);
         if (message is null || message.SenderId != userId)
             throw new InvalidOperationException("Chỉ người gửi mới có thể thu hồi tin nhắn.");
-        if (DateTime.UtcNow - message.CreatedAt > TimeSpan.FromMinutes(15))
+        if (DateTime.UtcNow - message.CreatedAt > TimeSpan.FromHours(MaxRecallHours))
             throw new InvalidOperationException("Đã hết thời gian thu hồi tin nhắn.");
         message.IsDeleted = true;
         message.DeletedAt = DateTime.UtcNow;
@@ -446,9 +573,7 @@ public class ConversationService : IConversationService
             item.Id == messageId && item.ConversationId == conversationId);
         if (message is null || !await IsMemberAsync(userId, conversationId))
             throw new InvalidOperationException("Không thể thêm phản ứng.");
-        if (string.IsNullOrWhiteSpace(emoji) || emoji.Trim().Length > 32)
-            throw new InvalidOperationException("Phản ứng không hợp lệ.");
-        emoji = emoji.Trim();
+        emoji = NormalizeReaction(emoji);
         var existingReactions = await _context.MessageReactions
             .Where(item => item.MessageId == messageId && item.UserId == userId)
             .ToListAsync();
@@ -478,6 +603,7 @@ public class ConversationService : IConversationService
     {
         if (!await IsMemberAsync(userId, conversationId))
             throw new InvalidOperationException("Bạn không thuộc cuộc hội thoại này.");
+        emoji = NormalizeReaction(emoji);
         var reaction = await _context.MessageReactions.FirstOrDefaultAsync(item =>
             item.MessageId == messageId &&
             item.Message.ConversationId == conversationId &&
@@ -502,8 +628,8 @@ public class ConversationService : IConversationService
             return;
         var pinnedCount = await _context.Messages.CountAsync(item =>
             item.ConversationId == conversationId && item.IsPinned);
-        if (pinnedCount >= 50)
-            throw new InvalidOperationException("Cuộc hội thoại đã đạt giới hạn 50 tin ghim.");
+        if (pinnedCount >= MaxPinnedMessages)
+            throw new InvalidOperationException($"Cuộc hội thoại đã đạt giới hạn {MaxPinnedMessages} tin ghim.");
         message.IsPinned = true;
         message.PinnedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
@@ -534,9 +660,13 @@ public class ConversationService : IConversationService
             .Include(message => message.Receipts)
             .Include(message => message.Reactions)
             .Include(message => message.Mentions)
+            .Include(message => message.Poll)
+                .ThenInclude(poll => poll!.Options)
+            .Include(message => message.Poll)
+                .ThenInclude(poll => poll!.Votes)
             .OrderByDescending(message => message.PinnedAt)
             .ToListAsync();
-        return messages.Select(ToResponse).ToList();
+        return messages.Select(message => ToResponse(message, userId)).ToList();
     }
 
     public async Task<Guid> RecordDeliveredAsync(Guid userId, Guid messageId)
@@ -569,6 +699,34 @@ public class ConversationService : IConversationService
         _context.UserBlocks.AnyAsync(block =>
             otherUserIds.Contains(block.BlockerId) && block.BlockedUserId == userId ||
             block.BlockerId == userId && otherUserIds.Contains(block.BlockedUserId));
+
+    private async Task<Poll> GetGroupPollAsync(Guid userId, Guid conversationId, Guid pollId)
+    {
+        var isGroupMember = await _context.Conversations.AnyAsync(conversation =>
+            conversation.Id == conversationId &&
+            conversation.IsGroup &&
+            conversation.Members.Any(member => member.UserId == userId));
+        if (!isGroupMember)
+            throw new InvalidOperationException("Bạn không thuộc nhóm này.");
+
+        return await _context.Polls
+            .Include(poll => poll.Options)
+            .Include(poll => poll.Votes)
+            .FirstOrDefaultAsync(poll =>
+                poll.Id == pollId && poll.Message.ConversationId == conversationId)
+            ?? throw new InvalidOperationException("Không tìm thấy bình chọn.");
+    }
+
+    private static string NormalizeReaction(string reaction)
+    {
+        var normalized = reaction?.Trim();
+        if (string.IsNullOrEmpty(normalized))
+            throw new InvalidOperationException("Phản ứng không hợp lệ.");
+        var canonical = AllowedReactions.FirstOrDefault(candidate =>
+            string.Equals(candidate, normalized, StringComparison.OrdinalIgnoreCase));
+        return canonical ?? throw new InvalidOperationException(
+            "Phản ứng phải là Like, Love, Haha, Wow, Sad hoặc Angry.");
+    }
 
     private static bool IsLastAdmin(Conversation conversation, ConversationMember member) =>
         IsAdmin(conversation, member) &&
@@ -615,7 +773,35 @@ public class ConversationService : IConversationService
         };
     }
 
-    private static MessageResponseDto ToResponse(Message message) => new()
+    private static PollResponseDto ToPollResponse(Poll poll, Guid userId, Guid conversationId)
+    {
+        var voteCounts = poll.Votes.GroupBy(vote => vote.OptionId)
+            .ToDictionary(group => group.Key, group => group.Count());
+        var totalVotes = poll.Votes.Count;
+        return new PollResponseDto
+        {
+            Id = poll.Id,
+            ConversationId = conversationId,
+            MessageId = poll.MessageId,
+            Question = poll.Question,
+            CreatedAt = poll.CreatedAt,
+            TotalVotes = totalVotes,
+            MyVoteOptionId = poll.Votes.FirstOrDefault(vote => vote.UserId == userId)?.OptionId,
+            Options = poll.Options.Select(option =>
+            {
+                var voteCount = voteCounts.GetValueOrDefault(option.Id);
+                return new PollOptionResultDto
+                {
+                    Id = option.Id,
+                    Text = option.Text,
+                    VoteCount = voteCount,
+                    Percentage = totalVotes == 0 ? 0 : Math.Round((decimal)voteCount * 100 / totalVotes, 2)
+                };
+            }).ToList()
+        };
+    }
+
+    private static MessageResponseDto ToResponse(Message message, Guid userId = default) => new()
     {
         Id = message.Id,
         SenderId = message.SenderId,
@@ -641,6 +827,7 @@ public class ConversationService : IConversationService
         MentionedUserIds = message.Mentions.Select(mention => mention.UserId).ToList(),
         IsPinned = message.IsPinned,
         IsDeleted = message.IsDeleted,
-        EditedAt = message.EditedAt
+        EditedAt = message.EditedAt,
+        Poll = message.Poll is null ? null : ToPollResponse(message.Poll, userId, message.ConversationId)
     };
 }

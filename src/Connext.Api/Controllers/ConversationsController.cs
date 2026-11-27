@@ -44,6 +44,50 @@ public class ConversationsController : ControllerBase
         }
     }
 
+    [HttpPost("{conversationId:guid}/polls")]
+    public async Task<IActionResult> CreatePoll(Guid conversationId, [FromBody] CreatePollDto request)
+    {
+        try
+        {
+            var poll = await _conversationService.CreatePollAsync(CurrentUserId, conversationId, request);
+            return CreatedAtAction(nameof(GetPoll), new { conversationId, pollId = poll.Id }, poll);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
+    [HttpGet("{conversationId:guid}/polls/{pollId:guid}")]
+    public async Task<IActionResult> GetPoll(Guid conversationId, Guid pollId)
+    {
+        try
+        {
+            return Ok(await _conversationService.GetPollAsync(CurrentUserId, conversationId, pollId));
+        }
+        catch (InvalidOperationException)
+        {
+            return NotFound();
+        }
+    }
+
+    [HttpPost("{conversationId:guid}/polls/{pollId:guid}/vote")]
+    public async Task<IActionResult> VotePoll(
+        Guid conversationId,
+        Guid pollId,
+        [FromBody] CastPollVoteDto request)
+    {
+        try
+        {
+            return Ok(await _conversationService.VotePollAsync(
+                CurrentUserId, conversationId, pollId, request.OptionId));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
         [HttpPost("direct/{friendId:guid}")]
         public async Task<IActionResult> CreateDirect(Guid friendId)
         {

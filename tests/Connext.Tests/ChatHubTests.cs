@@ -292,5 +292,15 @@ public class ChatHubTests
             Guid conversationId,
             Connext.Shared.DTOs.Conversations.MessageResponseDto message) =>
             Task.CompletedTask;
+
+        public Task PollCreatedAsync(
+            Guid conversationId,
+            Connext.Shared.DTOs.Conversations.MessageResponseDto message) =>
+            Task.CompletedTask;
+
+        public Task PollVotedAsync(
+            Guid conversationId,
+            Connext.Shared.DTOs.Conversations.PollVoteUpdateDto update) =>
+            Task.CompletedTask;
     }
 }

@@ -97,6 +97,66 @@ public class ConversationFileServiceTests
     }
 
     [Fact]
+    public async Task UploadAsync_EnforcesImageLimitAndAcceptsExactBoundary()
+    {
+        using var context = CreateContext();
+        var memberId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        SeedConversation(context, memberId, conversationId);
+        var storage = new TestFileStorage();
+        var service = new ConversationFileService(context, storage);
+        var pngHeader = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
+
+        var uploaded = await service.UploadAsync(
+            memberId,
+            conversationId,
+            new TestFormFile("photo.png", ConversationFileService.MaxImageBytes, pngHeader),
+            CancellationToken.None);
+        Assert.Equal("Image", uploaded.Kind);
+
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.UploadAsync(
+            memberId,
+            conversationId,
+            new TestFormFile("large.png", ConversationFileService.MaxImageBytes + 1, pngHeader),
+            CancellationToken.None));
+        Assert.Single(await context.MediaAssets.ToListAsync());
+    }
+
+    [Fact]
+    public async Task UploadAsync_AcceptsVideoAndDocumentAtOneHundredMegabytes()
+    {
+        using var context = CreateContext();
+        var memberId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        SeedConversation(context, memberId, conversationId);
+        var service = new ConversationFileService(context, new TestFileStorage());
+
+        await service.UploadAsync(
+            memberId,
+            conversationId,
+            new TestFormFile("video.mp4", ConversationFileService.MaxVideoBytes),
+            CancellationToken.None);
+        await service.UploadAsync(
+            memberId,
+            conversationId,
+            new TestFormFile(
+                "notes.txt",
+                ConversationFileService.MaxDocumentBytes,
+                System.Text.Encoding.ASCII.GetBytes("plain text")),
+            CancellationToken.None);
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.UploadAsync(
+            memberId,
+            conversationId,
+            new TestFormFile(
+                "oversize.txt",
+                ConversationFileService.MaxDocumentBytes + 1,
+                System.Text.Encoding.ASCII.GetBytes("plain text")),
+            CancellationToken.None));
+
+        Assert.Equal(2, await context.MediaAssets.CountAsync());
+    }
+
+    [Fact]
     public async Task DownloadInfoAsync_RequiresConversationMembership()
     {
         using var context = CreateContext();
@@ -180,7 +240,10 @@ public class ConversationFileServiceTests
             Task.CompletedTask;
     }
 
-    private sealed class TestFormFile(string fileName, long length) : IFormFile
+    private sealed class TestFormFile(
+        string fileName,
+        long length,
+        byte[]? content = null) : IFormFile
     {
         public string ContentDisposition => string.Empty;
         public string ContentType => "video/mp4";
@@ -191,6 +254,7 @@ public class ConversationFileServiceTests
         public void CopyTo(Stream target) => OpenReadStream().CopyTo(target);
         public Task CopyToAsync(Stream target, CancellationToken cancellationToken = default) =>
             OpenReadStream().CopyToAsync(target, cancellationToken);
-        public Stream OpenReadStream() => new MemoryStream([0, 0, 0, 24, 102, 116, 121, 112]);
+        public Stream OpenReadStream() =>
+            new MemoryStream(content ?? [0, 0, 0, 24, 102, 116, 121, 112, 0, 0, 0, 0]);
     }
 }

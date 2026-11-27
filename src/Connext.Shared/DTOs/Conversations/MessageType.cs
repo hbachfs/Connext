@@ -5,5 +5,6 @@ public enum MessageType
     Text,
     Image,
     File,
-    Call
+    Call,
+    Poll
 }

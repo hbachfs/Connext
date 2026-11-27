@@ -18,4 +18,6 @@ public interface IChatNotifier
     Task MessagePinnedAsync(Guid conversationId, Guid messageId, Guid userId);
     Task MessageUnpinnedAsync(Guid conversationId, Guid messageId, Guid userId);
     Task CallHistoryRecordedAsync(Guid conversationId, MessageResponseDto message);
+    Task PollCreatedAsync(Guid conversationId, MessageResponseDto message);
+    Task PollVotedAsync(Guid conversationId, PollVoteUpdateDto update);
 }

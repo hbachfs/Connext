@@ -10,4 +10,5 @@ public class PasswordResetOtp
     public DateTime ExpiresAt { get; set; }
     public DateTime? ConsumedAt { get; set; }
     public int FailedAttempts { get; set; }
+    public DateTime? LockoutUntil { get; set; }
 }

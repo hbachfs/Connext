@@ -30,6 +30,8 @@ public class PasswordResetServiceTests
 
         await service.RequestOtpAsync(user.Email!);
         Assert.False(string.IsNullOrEmpty(sender.Code));
+        var otp = await context.PasswordResetOtps.SingleAsync();
+        Assert.Equal(TimeSpan.FromMinutes(3), otp.ExpiresAt - otp.CreatedAt);
         var validCode = sender.Code ?? throw new InvalidOperationException("The test code was not delivered.");
         Assert.Null(await service.VerifyOtpAsync(user.Email!, validCode == "000000" ? "000001" : "000000"));
 
@@ -55,6 +57,33 @@ public class PasswordResetServiceTests
         var wrongCode = sender.Code == "000000" ? "000001" : "000000";
         for (var attempt = 0; attempt < 5; attempt++)
             Assert.Null(await service.VerifyOtpAsync(user.Email!, wrongCode));
+
+        Assert.Null(await service.VerifyOtpAsync(user.Email!, sender.Code!));
+        var otp = await context.PasswordResetOtps.SingleAsync();
+        Assert.Equal(5, otp.FailedAttempts);
+        Assert.InRange(otp.LockoutUntil!.Value - DateTime.UtcNow, TimeSpan.FromMinutes(29), TimeSpan.FromMinutes(30));
+        await service.RequestOtpAsync(user.Email!);
+        Assert.Equal(1, sender.CallCount);
+
+        otp.CreatedAt = DateTime.UtcNow.AddMinutes(-31);
+        otp.LockoutUntil = DateTime.UtcNow.AddSeconds(-1);
+        await service.RequestOtpAsync(user.Email!);
+        Assert.Equal(2, sender.CallCount);
+    }
+
+    [Fact]
+    public async Task VerifyOtp_RejectsExpiredCode()
+    {
+        using var context = CreateContext();
+        var user = CreateUser();
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        var sender = new TestEmailSender();
+        var service = CreateService(context, sender);
+
+        await service.RequestOtpAsync(user.Email!);
+        var otp = await context.PasswordResetOtps.SingleAsync();
+        otp.ExpiresAt = DateTime.UtcNow.AddSeconds(-1);
 
         Assert.Null(await service.VerifyOtpAsync(user.Email!, sender.Code!));
     }
@@ -105,9 +134,11 @@ public class PasswordResetServiceTests
     private sealed class TestEmailSender : IEmailSender
     {
         public string? Code { get; private set; }
+        public int CallCount { get; private set; }
 
         public Task SendPasswordResetCodeAsync(string email, string code)
         {
+            CallCount++;
             Code = code;
             return Task.CompletedTask;
         }
