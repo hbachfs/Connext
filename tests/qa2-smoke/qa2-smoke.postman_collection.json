@@ -1,0 +1,165 @@
+{
+    "variable":  [
+                     {
+                         "key":  "baseUrl",
+                         "value":  "http://localhost:5232"
+                     }
+                 ],
+    "info":  {
+                 "name":  "Connext - QA2 CI Smoke Testing",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+             },
+    "item":  [
+                 {
+                     "request":  {
+                                     "method":  "GET",
+                                     "url":  "{{baseUrl}}/api/health",
+                                     "header":  [
+
+                                                ],
+                                     "auth":  {
+                                                  "type":  "noauth"
+                                              }
+                                 },
+                     "name":  "TC_CI_01 - API Health",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 200\u0027, function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});",
+                                                                   "pm.test(\u0027API healthy\u0027, function () {",
+                                                                   "    pm.expect(pm.response.json().status).to.eql(\u0027healthy\u0027);",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "method":  "GET",
+                                     "url":  "{{baseUrl}}/api/Contacts/friends",
+                                     "header":  [
+
+                                                ],
+                                     "auth":  {
+                                                  "type":  "noauth"
+                                              }
+                                 },
+                     "name":  "TC_CI_02 - Contacts no JWT",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 401\u0027, function () {",
+                                                                   "    pm.response.to.have.status(401);",
+                                                                   "});",
+                                                                   "pm.test(\u0027Bearer authentication required\u0027, function () {",
+                                                                   "    pm.expect(pm.response.headers.get(\u0027WWW-Authenticate\u0027)).to.include(\u0027Bearer\u0027);",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "method":  "GET",
+                                     "url":  "{{baseUrl}}/api/Contacts/friends",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer fake.invalid.token"
+                                                    }
+                                                ],
+                                     "auth":  {
+                                                  "type":  "noauth"
+                                              }
+                                 },
+                     "name":  "TC_CI_03 - Contacts fake JWT",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 401\u0027, function () {",
+                                                                   "    pm.response.to.have.status(401);",
+                                                                   "});",
+                                                                   "pm.test(\u0027Bearer authentication required\u0027, function () {",
+                                                                   "    pm.expect(pm.response.headers.get(\u0027WWW-Authenticate\u0027)).to.include(\u0027Bearer\u0027);",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "method":  "POST",
+                                     "url":  "{{baseUrl}}/hubs/chat/negotiate?negotiateVersion=1",
+                                     "header":  [
+
+                                                ],
+                                     "auth":  {
+                                                  "type":  "noauth"
+                                              }
+                                 },
+                     "name":  "TC_CI_04 - SignalR no JWT",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 401\u0027, function () {",
+                                                                   "    pm.response.to.have.status(401);",
+                                                                   "});",
+                                                                   "pm.test(\u0027Bearer authentication required\u0027, function () {",
+                                                                   "    pm.expect(pm.response.headers.get(\u0027WWW-Authenticate\u0027)).to.include(\u0027Bearer\u0027);",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "method":  "POST",
+                                     "url":  "{{baseUrl}}/hubs/chat/negotiate?negotiateVersion=1",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer fake.invalid.token"
+                                                    }
+                                                ],
+                                     "auth":  {
+                                                  "type":  "noauth"
+                                              }
+                                 },
+                     "name":  "TC_CI_05 - SignalR fake JWT",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 401\u0027, function () {",
+                                                                   "    pm.response.to.have.status(401);",
+                                                                   "});",
+                                                                   "pm.test(\u0027Bearer authentication required\u0027, function () {",
+                                                                   "    pm.expect(pm.response.headers.get(\u0027WWW-Authenticate\u0027)).to.include(\u0027Bearer\u0027);",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 }
+             ]
+}
