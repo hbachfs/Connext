@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: invalid.jwt.token
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONV_03 - Status 401 Unauthorized\", function () {\r
+
+      \    pm.response.to.have.status(401);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_03 - JWT gia mao bi tu choi\", function () {\r
+
+      \    pm.expect(pm.response.code).to.not.eql(200);\r
+
+      });"
+    language: text/javascript
+order: 70000

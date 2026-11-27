@@ -1,0 +1,43 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/groups"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"name\": \"\",\r
+
+    \  \"memberIds\": []\r
+
+    }"
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONV_09 - Status 400 Bad Request\", function () {\r
+
+      \    pm.response.to.have.status(400);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_09 - Loi ten nhom rong\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    const errors = data.errors || {};\r
+
+      \    const nameError = errors.Name || errors.name;\r
+
+      \r
+
+      \    pm.expect(nameError, \"Phai co loi cua truong Name\").to.exist;\r
+
+      });"
+    language: text/javascript
+order: 47000

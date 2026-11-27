@@ -1,0 +1,49 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Auth/register"
+method: POST
+body:
+  type: json
+  content: "\r
+
+    {\r
+
+    \  \"email\": null,\r
+
+    \  \"phoneNumber\": \"0912345694\",\r
+
+    \  \"password\": \"{{convCPassword}}\",\r
+
+    \  \"displayName\": \"QA2 Conversation C\"\r
+
+    }\r\n"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"SETUP - Dang ky C thanh cong\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"SETUP - Response co userId\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \    pm.expect(data.userId).to.be.a(\"string\");\r
+
+      });\r
+
+      \r
+
+      if (pm.response.code === 200) {\r
+
+      \    const data = pm.response.json();\r
+
+      \    pm.environment.set(\"convCUserId\", data.userId);\r
+
+      }\r\n"
+    language: text/javascript
+order: 3000

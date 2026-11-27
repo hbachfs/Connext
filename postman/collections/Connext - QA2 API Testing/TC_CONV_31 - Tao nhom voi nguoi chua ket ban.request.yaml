@@ -1,0 +1,50 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/groups"
+method: POST
+body:
+  type: json
+  content: "\r
+
+    {\r
+
+    \  \"name\": \"QA2 Non Friend Test\",\r
+
+    \  \"memberIds\": [\r
+
+    \    \"{{convB2UserId}}\",\r
+
+    \    \"{{convDUserId}}\"\r
+
+    \  ]\r
+
+    }\r\n"
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_CONV_31 - Status 400 Bad Request\", function () {\r
+
+      \    pm.response.to.have.status(400);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_31 - Tu choi nguoi chua ket ban\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data).to.have.property(\"message\");\r
+
+      \    pm.expect(data.message).to.include(\"Chỉ có thể thêm người dùng đã là
+      bạn\");\r
+
+      });\r\n"
+    language: text/javascript
+order: 49000

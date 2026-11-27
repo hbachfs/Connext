@@ -1,0 +1,54 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/groups"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: "{\r
+
+    \  \"name\": \"QA2 Test Group\",\r
+
+    \  \"memberIds\": []\r
+
+    }"
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"TC_CONV_10 - Status 400 Bad Request\", function () {\r
+
+      \    pm.response.to.have.status(400);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_10 - Loi ten nhom qua 100 ky tu\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \    const errors = data.errors || {};\r
+
+      \    const nameError = errors.Name || errors.name;\r
+
+      \r
+
+      \    pm.expect(nameError, \"Phai co loi cua truong Name\").to.exist;\r
+
+      });"
+    language: text/javascript
+  - type: beforeRequest
+    code: "const body = JSON.parse(pm.request.body.raw);\r
+
+      \r
+
+      body.name = \"A\".repeat(101);\r
+
+      \r
+
+      pm.request.body.update(JSON.stringify(body));"
+    language: text/javascript
+order: 46000

@@ -1,0 +1,34 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Conversations/{{convGroupId}}/messages?pageSize=50"
+method: GET
+queryParams:
+  pageSize: "50"
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: afterResponse
+    code: "\r
+
+      pm.test(\"TC_CONV_14 - Status 200 OK\", function () {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"TC_CONV_14 - Response la danh sach tin nhan\", function () {\r
+
+      \    const data = pm.response.json();\r
+
+      \r
+
+      \    pm.expect(data).to.be.an(\"array\");\r
+
+      \    pm.expect(data.length).to.be.at.most(50);\r
+
+      });\r\n"
+    language: text/javascript
+order: 68000
