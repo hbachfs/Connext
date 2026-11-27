@@ -47,7 +47,7 @@ Link Figma: https://www.figma.com/design/1TfPer6pXaRggbWg6PeOzJ
 ## Cấu trúc thư mục
 
 ```
-design/ux/
+design/ux-wireframe/
   README.md
   sitemap/
     UX-00_Sitemap.png
