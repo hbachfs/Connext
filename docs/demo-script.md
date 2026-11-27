@@ -2,6 +2,8 @@
 
 Thời lượng đề xuất: 8–10 phút. Người trình bày chính: PM. Người thao tác máy: QA1. Địa chỉ demo: https://connext-app.eastasia.cloudapp.azure.com
 
+QA1 ghi nhận 12/12 ca E2E và hồi quy đạt trên nhánh `qa/qa1-business-ui-testing`; xem [báo cáo kiểm thử](../tests/E2E_Demo_And_Regression_Report.md).
+
 ## 0. Chuẩn bị trước 30 phút
 - [ ] Mở `/api/health` kiểm tra hệ thống sống.
 - [ ] Chuẩn bị 3 tài khoản mẫu từ #43 (An, Bình, Chi) và 2 trình duyệt (một cửa sổ ẩn danh).
@@ -12,7 +14,7 @@ Thời lượng đề xuất: 8–10 phút. Người trình bày chính: PM. Ng�
 ## 1. Luồng demo
 | # | Thời điểm | Thao tác | Chức năng | Người làm |
 |---|---|---|---|---|
-| 1 | 0:00 | Giới thiệu bài toán và kiến trúc (1 slide) | — | PM |
+| 1 | 0:00 | Giới thiệu bài toán và kiến trúc bằng lời (không dùng slide) | — | PM |
 | 2 | 1:00 | Đăng ký, đăng nhập An; quên mật khẩu bằng OTP (nhanh) | FR-01 | QA1 |
 | 3 | 2:00 | Cập nhật hồ sơ, đổi ảnh đại diện | FR-02 | QA1 |
 | 4 | 2:30 | Tìm Bình, gửi lời mời kết bạn; Bình chấp nhận ở cửa sổ ẩn danh | FR-03, FR-04 | QA1 |

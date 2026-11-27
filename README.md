@@ -16,7 +16,7 @@
 - [ ] Chat nhóm, @mention (FR-06)
 - [ ] Gửi file và ảnh HD, kho Ảnh/File/Link (FR-08, FR-09)
 
-**Ưu tiên 2 (làm nếu kịp tiến độ)**
+**Ưu tiên 2 (giữ trong phạm vi; nghiệm thu theo mức tối thiểu đã chốt)**
 - [ ] Reply, reaction, thu hồi tin nhắn (FR-07)
 - [ ] Gọi thoại/video 1-1 bằng WebRTC, chia sẻ màn hình (FR-10)
 - [ ] Ghim tin nhắn, bình chọn, giao việc (FR-11, FR-12, FR-13)
