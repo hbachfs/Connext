@@ -1,0 +1,128 @@
+
+name: QA2 API Smoke Testing
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  api-smoke-test:
+    name: Postman API Smoke Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Postman CLI
+        run: |
+          curl -fsSL https://dl-cli.pstmn.io/install/unix.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          postman -v
+
+      - name: Build Backend
+        run: dotnet build src/Connext.Api/Connext.Api.csproj --configuration Release
+
+      - name: Start Backend and run Smoke Tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export MSSQL_SA_PASSWORD="Qa2!$(openssl rand -hex 16)"
+          export JwtSettings__SecretKey="$(openssl rand -hex 32)"
+
+          echo "::add-mask::$MSSQL_SA_PASSWORD"
+          echo "::add-mask::$JwtSettings__SecretKey"
+
+          export ASPNETCORE_ENVIRONMENT=Development
+          export ASPNETCORE_URLS=http://127.0.0.1:5232
+          export ConnectionStrings__DefaultConnection="Server=127.0.0.1,1433;Database=Connext_QA2_CI;User Id=sa;Password=$MSSQL_SA_PASSWORD;TrustServerCertificate=True"
+          export Redis__Configuration="127.0.0.1:6379"
+
+          cleanup() {
+            if [ -n "${API_PID:-}" ]; then
+              kill "$API_PID" 2>/dev/null || true
+            fi
+            docker rm -f qa2-sqlserver qa2-redis 2>/dev/null || true
+          }
+
+          trap cleanup EXIT
+
+          docker run -d \
+            --name qa2-sqlserver \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_PID=Developer \
+            -e MSSQL_SA_PASSWORD \
+            -p 127.0.0.1:1433:1433 \
+            mcr.microsoft.com/mssql/server:2022-latest
+
+          docker run -d \
+            --name qa2-redis \
+            -p 127.0.0.1:6379:6379 \
+            redis:7-alpine
+
+          echo "Waiting for SQL Server..."
+
+          for i in {1..60}; do
+            if docker exec qa2-sqlserver sh -c '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -Q "SELECT 1" -b' >/dev/null 2>&1; then
+              break
+            fi
+
+            if [ "$i" -eq 60 ]; then
+              echo "SQL Server startup failed."
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          dotnet run \
+            --project src/Connext.Api/Connext.Api.csproj \
+            --configuration Release \
+            --no-build \
+            --no-launch-profile \
+            > "$RUNNER_TEMP/qa2-api.log" 2>&1 &
+
+          API_PID=$!
+
+          echo "Waiting for Backend..."
+
+          for i in {1..60}; do
+            if curl -fsS http://localhost:5232/api/health; then
+              break
+            fi
+
+            if [ "$i" -eq 60 ]; then
+              echo "Backend startup failed."
+              cat "$RUNNER_TEMP/qa2-api.log"
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          postman collection run \
+            tests/qa2-smoke/qa2-smoke.postman_collection.json \
+            -r cli,junit \
+            --reporter-junit-export "$RUNNER_TEMP/qa2-smoke.xml"
+
+      - name: Upload Smoke Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa2-smoke-test-results
+          path: ${{ runner.temp }}/qa2-smoke.xml
+          if-no-files-found: warn
