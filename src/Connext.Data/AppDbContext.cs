@@ -21,6 +21,9 @@ public class AppDbContext : DbContext
     public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
     public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
     public DbSet<MessageMention> MessageMentions => Set<MessageMention>();
+    public DbSet<Poll> Polls => Set<Poll>();
+    public DbSet<PollOption> PollOptions => Set<PollOption>();
+    public DbSet<PollVote> PollVotes => Set<PollVote>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -115,6 +118,37 @@ public class AppDbContext : DbContext
                 .HasForeignKey(mention => mention.MessageId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(mention => mention.User).WithMany()
                 .HasForeignKey(mention => mention.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Poll>(entity =>
+        {
+            entity.HasKey(poll => poll.Id);
+            entity.Property(poll => poll.Question).HasMaxLength(200).IsRequired();
+            entity.HasIndex(poll => poll.MessageId).IsUnique();
+            entity.HasOne(poll => poll.Message).WithOne(message => message.Poll)
+                .HasForeignKey<Poll>(poll => poll.MessageId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PollOption>(entity =>
+        {
+            entity.HasKey(option => option.Id);
+            entity.HasAlternateKey(option => new { option.PollId, option.Id });
+            entity.Property(option => option.Text).IsRequired();
+            entity.HasOne(option => option.Poll).WithMany(poll => poll.Options)
+                .HasForeignKey(option => option.PollId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PollVote>(entity =>
+        {
+            entity.HasKey(vote => new { vote.PollId, vote.UserId });
+            entity.HasOne(vote => vote.Poll).WithMany(poll => poll.Votes)
+                .HasForeignKey(vote => vote.PollId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(vote => vote.User).WithMany()
+                .HasForeignKey(vote => vote.UserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(vote => vote.Option).WithMany(option => option.Votes)
+                .HasForeignKey(vote => new { vote.PollId, vote.OptionId })
+                .HasPrincipalKey(option => new { option.PollId, option.Id })
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<MessageReceipt>(entity =>

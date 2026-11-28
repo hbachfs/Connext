@@ -10,8 +10,9 @@ namespace Connext.Api.Services;
 
 public class PasswordResetService : IPasswordResetService
 {
-    private static readonly TimeSpan OtpLifetime = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan OtpLifetime = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan SendLockout = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan GrantLifetime = TimeSpan.FromMinutes(10);
     private const int MaxFailedAttempts = 5;
 
@@ -43,14 +44,21 @@ public class PasswordResetService : IPasswordResetService
             return;
 
         var latestOtp = await _context.PasswordResetOtps
-            .Where(otp => otp.UserId == user.Id && otp.ConsumedAt == null)
+            .Where(otp => otp.UserId == user.Id)
             .OrderByDescending(otp => otp.CreatedAt)
             .FirstOrDefaultAsync();
         var now = DateTime.UtcNow;
-        if (latestOtp is not null && now - latestOtp.CreatedAt < ResendCooldown)
+        if (latestOtp?.LockoutUntil > now)
             return;
-        if (latestOtp is not null)
-            latestOtp.ConsumedAt = now;
+
+        var activeOtp = await _context.PasswordResetOtps
+            .Where(otp => otp.UserId == user.Id && otp.ConsumedAt == null)
+            .OrderByDescending(otp => otp.CreatedAt)
+            .FirstOrDefaultAsync();
+        if (activeOtp is not null && now - activeOtp.CreatedAt < ResendCooldown)
+            return;
+        if (activeOtp is not null)
+            activeOtp.ConsumedAt = now;
 
         var otp = new PasswordResetOtp
         {
@@ -106,7 +114,10 @@ public class PasswordResetService : IPasswordResetService
         {
             otp.FailedAttempts++;
             if (otp.FailedAttempts >= MaxFailedAttempts)
+            {
                 otp.ConsumedAt = now;
+                otp.LockoutUntil = now.Add(SendLockout);
+            }
             await _context.SaveChangesAsync();
             return null;
         }

@@ -6,6 +6,7 @@ public class CreateGroupConversationDto
 {
     [Required]
     [MinLength(2, ErrorMessage = "Nhóm cần ít nhất hai thành viên khác người tạo.")]
+    [MaxLength(49, ErrorMessage = "Nhóm không được vượt quá 50 thành viên, bao gồm người tạo.")]
     public List<Guid> MemberIds { get; set; } = [];
 
     [Required]
@@ -39,7 +40,7 @@ public class SendMessageDto
     public Guid ConversationId { get; set; }
 
     [Required]
-    [StringLength(4000, MinimumLength = 1)]
+    [StringLength(2000, MinimumLength = 1)]
     public string Content { get; set; } = string.Empty;
 
     [EnumDataType(typeof(MessageType))]
@@ -47,6 +48,51 @@ public class SendMessageDto
 
     public Guid? ReplyToMessageId { get; set; }
     public List<Guid> MentionedUserIds { get; set; } = [];
+}
+
+public class CreatePollDto
+{
+    [Required]
+    [StringLength(200, MinimumLength = 1)]
+    public string Question { get; set; } = string.Empty;
+
+    [Required]
+    [MinLength(2)]
+    [MaxLength(10)]
+    public List<string> Options { get; set; } = [];
+}
+
+public class CastPollVoteDto
+{
+    [Required]
+    public Guid OptionId { get; set; }
+}
+
+public class PollResponseDto
+{
+    public Guid Id { get; set; }
+    public Guid ConversationId { get; set; }
+    public Guid MessageId { get; set; }
+    public string Question { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public int TotalVotes { get; set; }
+    public Guid? MyVoteOptionId { get; set; }
+    public List<PollOptionResultDto> Options { get; set; } = [];
+}
+
+public class PollVoteUpdateDto
+{
+    public PollResponseDto Poll { get; set; } = new();
+    public Guid UserId { get; set; }
+    public Guid OptionId { get; set; }
+}
+
+public class PollOptionResultDto
+{
+    public Guid Id { get; set; }
+    public string Text { get; set; } = string.Empty;
+    public int VoteCount { get; set; }
+    public decimal Percentage { get; set; }
 }
 
 public class MessageResponseDto : MessageSummaryDto
@@ -60,6 +106,7 @@ public class MessageResponseDto : MessageSummaryDto
     public bool IsDeleted { get; set; }
     public DateTime? EditedAt { get; set; }
     public List<Guid> MentionedUserIds { get; set; } = [];
+    public PollResponseDto? Poll { get; set; }
 }
 
 public class AddConversationMemberDto

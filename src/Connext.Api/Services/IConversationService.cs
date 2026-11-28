@@ -10,6 +10,9 @@ public interface IConversationService
     Task MarkReadAsync(Guid userId, Guid conversationId);
     Task<bool> IsMemberAsync(Guid userId, Guid conversationId);
     Task<MessageResponseDto> SendMessageAsync(Guid userId, SendMessageDto request);
+    Task<PollResponseDto> CreatePollAsync(Guid userId, Guid conversationId, CreatePollDto request);
+    Task<PollResponseDto> GetPollAsync(Guid userId, Guid conversationId, Guid pollId);
+    Task<PollResponseDto> VotePollAsync(Guid userId, Guid conversationId, Guid pollId, Guid optionId);
     Task<MessageResponseDto> RecordCallHistoryAsync(
         Guid conversationId,
         Guid callerId,

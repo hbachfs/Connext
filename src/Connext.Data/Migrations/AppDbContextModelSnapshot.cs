@@ -319,6 +319,9 @@ namespace Connext.Data.Migrations
                     b.Property<int>("FailedAttempts")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("LockoutUntil")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
 
@@ -327,6 +330,72 @@ namespace Connext.Data.Migrations
                     b.HasIndex("UserId", "CreatedAt");
 
                     b.ToTable("PasswordResetOtps");
+                });
+
+            modelBuilder.Entity("Connext.Data.Entities.Poll", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Question")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId")
+                        .IsUnique();
+
+                    b.ToTable("Polls");
+                });
+
+            modelBuilder.Entity("Connext.Data.Entities.PollOption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PollId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PollOptions");
+                });
+
+            modelBuilder.Entity("Connext.Data.Entities.PollVote", b =>
+                {
+                    b.Property<Guid>("PollId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OptionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("VotedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("PollId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("PollId", "OptionId");
+
+                    b.ToTable("PollVotes");
                 });
 
             modelBuilder.Entity("Connext.Data.Entities.User", b =>
@@ -571,6 +640,56 @@ namespace Connext.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Connext.Data.Entities.Poll", b =>
+                {
+                    b.HasOne("Connext.Data.Entities.Message", "Message")
+                        .WithOne("Poll")
+                        .HasForeignKey("Connext.Data.Entities.Poll", "MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+                });
+
+            modelBuilder.Entity("Connext.Data.Entities.PollOption", b =>
+                {
+                    b.HasOne("Connext.Data.Entities.Poll", "Poll")
+                        .WithMany("Options")
+                        .HasForeignKey("PollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Poll");
+                });
+
+            modelBuilder.Entity("Connext.Data.Entities.PollVote", b =>
+                {
+                    b.HasOne("Connext.Data.Entities.Poll", "Poll")
+                        .WithMany("Votes")
+                        .HasForeignKey("PollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Connext.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Connext.Data.Entities.PollOption", "Option")
+                        .WithMany("Votes")
+                        .HasForeignKey("PollId", "OptionId")
+                        .HasPrincipalKey("PollId", "Id")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Option");
+
+                    b.Navigation("Poll");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Connext.Data.Entities.UserBlock", b =>
                 {
                     b.HasOne("Connext.Data.Entities.User", "BlockedUser")
@@ -601,9 +720,23 @@ namespace Connext.Data.Migrations
                 {
                     b.Navigation("Mentions");
 
+                    b.Navigation("Poll");
+
                     b.Navigation("Reactions");
 
                     b.Navigation("Receipts");
+                });
+
+            modelBuilder.Entity("Connext.Data.Entities.Poll", b =>
+                {
+                    b.Navigation("Options");
+
+                    b.Navigation("Votes");
+                });
+
+            modelBuilder.Entity("Connext.Data.Entities.PollOption", b =>
+                {
+                    b.Navigation("Votes");
                 });
 #pragma warning restore 612, 618
         }
